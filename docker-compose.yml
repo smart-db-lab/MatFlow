@@ -1,0 +1,73 @@
+version: "3.9"
+
+x-server-defaults: &server-defaults
+    build:
+        context: ./server
+        dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+        DJANGO_SETTINGS_MODULE: Matflow.settings
+        CELERY_BROKER_URL: redis://redis:6379/0
+        CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+        - ./server:/app
+    depends_on:
+        - redis
+
+services:
+    redis:
+        image: redis:7-alpine
+        restart: unless-stopped
+        ports:
+            - "6373:6379"
+        volumes:
+            - redis_data:/data
+
+    server:
+        <<: *server-defaults
+        command:
+            - uvicorn
+            - Matflow.asgi:application
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+            - --reload
+        ports:
+            - "8000:8000"
+
+    worker:
+        <<: *server-defaults
+        environment:
+            DJANGO_SETTINGS_MODULE: Matflow.settings
+            CELERY_BROKER_URL: redis://redis:6379/0
+            CELERY_RESULT_BACKEND: redis://redis:6379/0
+            LD_LIBRARY_PATH: /opt/conda/lib
+        command:
+            - celery
+            - -A
+            - Matflow
+            - worker
+            - -l
+            - info
+            - --pool=solo
+
+    client:
+        build:
+            context: ./client
+            dockerfile: Dockerfile
+        restart: unless-stopped
+        env_file:
+            - ./client/.env.docker
+        ports:
+            - "5173:5173"
+        volumes:
+            - ./client:/app
+            - /app/node_modules
+        environment:
+            VITE_PROXY_TARGET: http://server:8000
+        depends_on:
+            - server
+
+volumes:
+    redis_data:

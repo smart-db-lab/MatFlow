@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@mui/x-data-grid": "^8.18.0",
+    "zod": "^4.1.12"
+  }
+}

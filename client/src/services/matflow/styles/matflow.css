@@ -1,0 +1,36 @@
+/**
+ * Matflow Service-Specific Styles
+ * Uses CSS variables for theming — aligned with style.jsonc palette
+ */
+
+:root {
+  --matflow-primary: #0D9488;
+  --matflow-primary-dark: #0F766E;
+  --matflow-primary-light: #5EEAD4;
+  --matflow-hover: #0F766E;
+  --matflow-accent: #10B981;
+  --matflow-bg: #F9FAFB;
+  --matflow-surface: #FFFFFF;
+  --matflow-border: #E5E7EB;
+  --matflow-illustration-bg: #ECFEF6;
+}
+
+/* Service-specific component styles */
+.service-layout[data-service="matflow"] {
+  background-color: var(--matflow-bg);
+}
+
+/* Matflow button styles */
+.service-layout[data-service="matflow"] .btn-matflow {
+  background-color: var(--matflow-primary);
+  color: white;
+}
+
+.service-layout[data-service="matflow"] .btn-matflow:hover {
+  background-color: var(--matflow-hover);
+}
+
+/* Matflow card styles */
+.service-layout[data-service="matflow"] .card-matflow {
+  border-color: var(--matflow-border);
+}

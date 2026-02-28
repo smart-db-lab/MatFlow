@@ -1,0 +1,28 @@
+
+### Test the optimize endpoint
+POST {{baseUrl}}/optimize/
+Content-Type: application/json
+
+{
+  "data": [
+    {"feature1": 1.0, "feature2": 2.0, "target": 3.0},
+    {"feature1": 4.0, "feature2": 5.0, "target": 6.0},
+    {"feature1": 14.0, "feature2": 15.0, "target": 16.0}
+  ],
+  "features": ["feature1", "feature2"],
+  "target": "target",
+  "target_value": [4.5,4],
+  "pso_config": {
+    "lb": [0, 0],
+    "ub": [10, 10],
+    "swarmsize": 50,
+    "omega": 0.5,
+    "phip": 1.5,
+    "phig": 1.5,
+    "maxiter": 10,
+    "n_solutions": 10,
+    "nprocessors": 4,
+    "max_rounds": 10,
+    "debug_flag": false
+  }
+}

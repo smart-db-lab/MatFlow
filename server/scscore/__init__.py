@@ -1,0 +1,1 @@
+# SCScore package initialization

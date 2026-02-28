@@ -1,0 +1,190 @@
+---
+description: Matflow Design System — apply this design system to ALL UI components, pages, and styling across the entire project. Reference this when writing any JSX, Tailwind classes, or CSS.
+globs:
+  - "client/src/**/*.{jsx,tsx,js,ts,css}"
+  - "client/tailwind.config.js"
+---
+
+# Matflow Design System
+
+This rule defines the **single source of truth** for all UI styling in the Matflow project. Every component, page, and style must follow these guidelines. The design reference is `style.jsonc` at the project root.
+
+---
+
+## Color Palette (Tailwind token → hex)
+
+| Token              | Tailwind class prefix  | Hex       | Usage                                        |
+|--------------------|------------------------|-----------|----------------------------------------------|
+| `primary`          | `primary`              | `#0D9488` | Main accents, primary buttons, links, icons  |
+| `primary-dark`     | `primary-dark`         | `#0F766E` | Hover/active states for primary elements     |
+| `primary-light`    | `primary-light`        | `#5EEAD4` | Subtle fills, light accents, focus rings     |
+| `accent`           | `accent`               | `#10B981` | Success states, illustration highlights      |
+| `text-primary`     | `text` (default)       | `#111827` | Main headings, body text (gray-900)          |
+| `text-secondary`   | N/A                    | `#4B5563` | Subtitles, descriptions (gray-600)           |
+| `text-light`       | N/A                    | `#6B7280` | Metadata, small text (gray-500)              |
+| `background`       | `bg`                   | `#F9FAFB` | Page background (gray-50)                    |
+| `surface`          | N/A                    | `#FFFFFF` | Cards, panels, hero sections                 |
+| `border`           | N/A                    | `#E5E7EB` | Borders, dividers (gray-200)                 |
+| `illustration-bg`  | `illustration-bg`      | `#ECFEF6` | Pale mint containers for illustrations       |
+| `success`          | `accent`               | `#10B981` | Positive states                              |
+| `warning`          | N/A                    | `#F59E0B` | Warning states                               |
+| `error`            | `danger`               | `#EF4444` | Error/destructive states                     |
+
+### Color rules
+- **Primary color is TEAL `#0D9488`**, NOT blue. Never use `#3b82f6` as primary.
+- Use `bg-primary` / `text-primary` / `border-primary` for teal accents.
+- Use `hover:bg-primary-dark` for hover states on primary elements.
+- Use `bg-primary/10` for subtle teal backgrounds (icon containers, highlights).
+- Backgrounds: `bg-gray-50` (`#F9FAFB`) for page, `bg-white` for cards/surfaces.
+- Text: `text-gray-900` for headings, `text-gray-600` for body, `text-gray-500` for metadata.
+
+---
+
+## Typography
+
+### Font family
+- **Primary font: Inter** — `font-sans` (configured in Tailwind as the default sans-serif)
+- Mono: `font-mono` (system monospace stack)
+- **Do NOT use** `font-titillium` or `font-roboto` — these are legacy.
+
+### Font sizes & weights
+| Element          | Size               | Weight        | Tailwind classes                    |
+|------------------|--------------------|--------------|------------------------------------|
+| Brand title (h1) | 3.5rem (56px)      | 700 (bold)   | `text-6xl font-bold uppercase`     |
+| Section title    | 2.5rem (40px)      | 700          | `text-4xl font-bold`               |
+| Subtitle (h3)    | 1.875rem (30px)    | 600          | `text-3xl font-semibold`           |
+| Body text        | 1.125rem (18px)    | 400          | `text-lg font-normal leading-relaxed` |
+| Small/labels     | 0.875rem (14px)    | 500          | `text-sm font-medium`              |
+
+### Typography rules
+- Brand title (`MATFLOW`) is **uppercase**: use `uppercase tracking-tight`.
+- Headings use `tracking-tight` (letter-spacing: -0.025em).
+- Body text uses default letter-spacing.
+- Buttons do NOT use text-transform.
+
+---
+
+## Component Patterns
+
+### Buttons
+
+**Primary button:**
+```
+bg-primary hover:bg-primary-dark text-white rounded-lg px-6 py-3 font-semibold
+shadow-md hover:shadow-lg transition-all duration-200
+```
+
+**Secondary button:**
+```
+bg-transparent border border-gray-300 text-gray-700 rounded-lg px-6 py-3 font-medium
+hover:bg-gray-50 transition-all duration-200
+```
+
+**Outline button:**
+```
+Same as secondary — transparent bg with border.
+```
+
+### Cards
+```
+bg-white border border-gray-200 rounded-xl p-6
+shadow-soft hover:shadow-md transition-all duration-200 hover:-translate-y-0.5
+```
+- Border radius: `rounded-xl` (12px)
+- Padding: `p-6` (24px)
+- Shadow: subtle (`shadow-soft` or `shadow-sm`)
+- Hover: slight lift + shadow increase
+
+### Hero Section
+- Layout: `flex` row on desktop (text left, illustration right)
+- Background: `bg-gray-50` or `bg-white` — clean, minimal
+- Illustration container: `bg-illustration-bg rounded-2xl` with macOS-style frame
+- NO heavy animated gradient orbs — keep it clean and professional
+- Subtle parallax or gentle animations only
+
+### Navbar
+- `bg-white/80 backdrop-blur-md border-b border-gray-200`
+- Brand name: teal colored or use `text-gray-900 font-bold`
+- Nav links: `text-gray-700 hover:text-primary` with teal underline on hover
+- Login/CTA button: primary button style (teal)
+- Badges (Signed In, Admin): `text-sm font-medium` with teal/accent colors
+- NO animated gradient orbs in navbar — keep it clean
+
+---
+
+## Shadows
+
+| Token    | Value                                                              | Tailwind       |
+|----------|--------------------------------------------------------------------|---------------|
+| soft     | `0 1px 3px rgba(0,0,0,0.05)`                                      | `shadow-sm`   |
+| medium   | `0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)` | `shadow-md`   |
+| card     | `0 10px 15px -3px rgba(0,0,0,0.1)`                                | `shadow-lg`   |
+
+---
+
+## Border Radius
+
+| Token | Value   | Tailwind       |
+|-------|---------|---------------|
+| sm    | 6px     | `rounded-md`  |
+| md    | 8px     | `rounded-lg`  |
+| lg    | 12px    | `rounded-xl`  |
+| pill  | 9999px  | `rounded-full`|
+
+---
+
+## Spacing
+Follow the scale: 4, 8, 12, 16, 24, 32, 48, 64, 96 (maps to Tailwind's default scale).
+
+---
+
+## Design Principles
+
+1. **Professional tech SaaS** — clean, trustworthy, modern, data/ML focused.
+2. **NOT overly playful** — no rainbow gradients, no heavy animations.
+3. **Teal is the accent** — used sparingly for CTAs, active states, and highlights.
+4. **White space** — generous padding and margins for readability.
+5. **Consistency** — same button, card, and typography patterns everywhere.
+6. **Subtle interactions** — gentle hover lifts, smooth transitions (200-300ms), no bounce.
+
+---
+
+## Anti-Patterns (DO NOT)
+
+- ❌ Use blue `#3b82f6` as primary (legacy — replaced by teal `#0D9488`)
+- ❌ Use `bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600` gradients
+- ❌ Use `font-titillium` or `font-roboto` (replaced by Inter)
+- ❌ Add heavy animated gradient orbs/meshes to pages
+- ❌ Use `animate-pulse` on background elements
+- ❌ Use `from-primary-btn` with gradient text
+- ❌ Mix multiple animation libraries for simple hover effects
+- ❌ Use deep shadows on flat elements
+
+---
+
+## Toast Notifications
+
+Toasts use **subtle, pastel backgrounds** with colored text — soothing and not eye-straining:
+
+- Success: `bg: #f0fdf4`, `text: #166534`, `border: #bbf7d0`, `progress: #22c55e`
+- Error: `bg: #fef2f2`, `text: #991b1b`, `border: #fecaca`, `progress: #ef4444`
+- Warning: `bg: #fffbeb`, `text: #92400e`, `border: #fde68a`, `progress: #f59e0b`
+- Info: `bg: #f0fdfa`, `text: #115e59`, `border: #99f6e4`, `progress: #0d9488`
+
+Theme: `"light"` (NOT `"colored"`).
+
+---
+
+## Charts (Plotly)
+
+- Font: Inter stack
+- Primary colorway should include teal (`#0D9488`, `#5EEAD4`) prominently
+- Background: white
+- Grid: `rgba(0,0,0,0.06)`
+- Text: `#4B5563` body, `#111827` titles
+
+---
+
+## File Reference
+
+The canonical style spec is `style.jsonc` at the project root. When in doubt, refer to that file for exact hex values, font sizes, and spacing values.

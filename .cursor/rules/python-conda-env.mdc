@@ -1,0 +1,19 @@
+---
+description: Always activate the conda venv before running Python/Django commands
+alwaysApply: true
+---
+
+# Python / Django environment usage
+
+- **Always run backend Python/Django commands from the `server/` directory.**
+- **Before any `python` or `manage.py` command, activate the conda environment:**
+  - Use `conda activate venv` in the integrated terminal.
+  - For PowerShell, it is safe to chain commands as:  
+    `conda activate venv; python manage.py <command>`
+- When the agent needs to run Django management commands (e.g. migrations, `runserver`, custom scripts), it should:
+  1. Set the working directory to `i:\\Web\\Kerd\\MLFlow\\server`.
+  2. Ensure `conda activate venv` has been executed in that terminal session.
+  3. Then execute the required `python manage.py ...` commands.
+
+This rule applies to **all tasks** in this repository to avoid using the wrong Python environment.
+

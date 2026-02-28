@@ -1,0 +1,64 @@
+### Feature Selection API Test with Demo Data
+
+POST http://localhost:8000/api/pfs/
+Content-Type: application/json
+
+{
+  "dataset": [
+    {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2, "species": "Iris-setosa"},
+    {"sepal_length": 4.9, "sepal_width": 3.0, "petal_length": 1.4, "petal_width": 0.2, "species": "Iris-setosa"},
+    {"sepal_length": 6.2, "sepal_width": 2.9, "petal_length": 4.3, "petal_width": 1.3, "species": "Iris-versicolor"},
+    {"sepal_length": 6.3, "sepal_width": 3.3, "petal_length": 6.0, "petal_width": 2.5, "species": "Iris-virginica"}
+  ],
+  "target_var": "species",
+  "problem_type": "classification",
+  "estimator_name": "RandomForestClassifier",
+  "kfold": 2,
+  "display_opt": "All"
+}
+
+### Feature Selection API Test with Custom Features
+
+POST http://localhost:8000/api/pfs/
+Content-Type: application/json
+
+{
+  "dataset": [
+    {"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2, "species": "Iris-setosa"},
+    {"sepal_length": 4.9, "sepal_width": 3.0, "petal_length": 1.4, "petal_width": 0.2, "species": "Iris-setosa"},
+    {"sepal_length": 6.2, "sepal_width": 2.9, "petal_length": 4.3, "petal_width": 1.3, "species": "Iris-versicolor"},
+    {"sepal_length": 6.3, "sepal_width": 3.3, "petal_length": 6.0, "petal_width": 2.5, "species": "Iris-virginica"}
+  ],
+  "target_var": "species",
+  "problem_type": "classification",
+  "estimator_name": "XGBClassifier",
+  "kfold": 2,
+  "display_opt": "Custom",
+  "features_to_display": ["sepal_length", "petal_width"]
+}
+
+
+### Feature Selection API Test with Regression Data
+
+POST http://localhost:8000/api/pfs/
+Content-Type: application/json
+
+{
+  "dataset": [
+    {"feature1": 1.0, "feature2": 2.1, "feature3": 3.2, "target": 6.5},
+    {"feature1": 2.0, "feature2": 3.1, "feature3": 4.1, "target": 9.2},
+    {"feature1": 3.0, "feature2": 4.0, "feature3": 5.2, "target": 12.3},
+    {"feature1": 4.0, "feature2": 5.2, "feature3": 6.3, "target": 15.4},
+    {"feature1": 5.0, "feature2": 6.1, "feature3": 7.1, "target": 18.1},
+    {"feature1": 6.0, "feature2": 7.0, "feature3": 8.0, "target": 21.2},
+    {"feature1": 7.0, "feature2": 8.1, "feature3": 9.2, "target": 24.3},
+    {"feature1": 8.0, "feature2": 9.0, "feature3": 10.1, "target": 27.1},
+    {"feature1": 9.0, "feature2": 10.2, "feature3": 11.3, "target": 30.4},
+    {"feature1": 10.0, "feature2": 11.1, "feature3": 12.2, "target": 33.2}
+  ],
+  "target_var": "target",
+  "problem_type": "regression",
+  "estimator_name": "RandomForestRegressor",
+  "kfold": 5,
+  "display_opt": "All"
+}

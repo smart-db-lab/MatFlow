@@ -1,0 +1,454 @@
+### 1. Barplot Demo - Single Category
+POST http://localhost:8000/api/eda/barplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category": "A", "value": 10},
+        {"category": "B", "value": 15},
+        {"category": "C", "value": 7},
+        {"category": "A", "value": 12},
+        {"category": "B", "value": 17},
+        {"category": "C", "value": 5}
+    ],
+    "cat": ["category"],
+    "num": "value",
+    "hue": "-",
+    "orient": "Vertical",
+    "annotate": true,
+    "title": "Sample Bar Plot"
+}
+
+### 1. Barplot Demo - Multiple Categories
+POST http://localhost:8000/api/eda/barplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category1": "A", "category2": "X", "value": 10},
+        {"category1": "B", "category2": "Y", "value": 15},
+        {"category1": "C", "category2": "Z", "value": 7},
+        {"category1": "A", "category2": "X", "value": 12},
+        {"category1": "B", "category2": "Y", "value": 17},
+        {"category1": "C", "category2": "Z", "value": 5}
+    ],
+    "cat": ["category1", "category2"],
+    "num": "value",
+    "hue": "-",
+    "orient": "Vertical",
+    "annotate": true,
+    "title": "Sample Bar Plot with Multiple Categories"
+}
+
+### 2. Histogram Demo - Single Variable
+POST http://localhost:8000/api/eda/histogram/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"value": 10},
+        {"value": 15},
+        {"value": 7},
+        {"value": 12},
+        {"value": 17},
+        {"value": 5},
+        {"value": 20},
+        {"value": 8},
+        {"value": 13}
+    ],
+    "var": ["value"],
+    "title": "Sample Histogram",
+    "hue": "-",
+    "orient": "Vertical",
+    "agg": "count",
+    "autoBin": 5,
+    "kde": false,
+    "legend": true
+}
+
+### 2. Histogram Demo - Multiple Variables
+POST http://localhost:8000/api/eda/histogram/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"value1": 10},
+        {"value1": 15},
+        {"value1": 7},
+        {"value1": 12},
+        {"value1": 17},
+        {"value1": 5},
+        {"value1": 20},
+        {"value1": 8},
+        {"value1": 13},
+        {"value2": 9},
+        {"value2": 14},
+        {"value2": 6},
+        {"value2": 11},
+        {"value2": 18}
+    ],
+    "var": ["value1", "value2"],
+    "title": "Sample Histogram with Multiple Variables",
+    "hue": "-",
+    "orient": "Vertical",
+    "agg": "count",
+    "autoBin": 5,
+    "kde": false,
+    "legend": true
+}
+
+### 3. Scatterplot Demo - Single X Variable
+POST http://localhost:8000/api/eda/scatterplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"x_value": 1, "y_value": 10, "group": "A"},
+        {"x_value": 2, "y_value": 15, "group": "B"},
+        {"x_value": 3, "y_value": 7, "group": "A"},
+        {"x_value": 4, "y_value": 12, "group": "B"},
+        {"x_value": 5, "y_value": 17, "group": "A"},
+        {"x_value": 6, "y_value": 5, "group": "B"}
+    ],
+    "x_var": ["x_value"],
+    "y_var": "y_value",
+    "hue": "group",
+    "title": "Sample Scatter Plot"
+}
+
+### 3. Scatterplot Demo - Multiple X Variables
+POST http://localhost:8000/api/eda/scatterplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"x1": 1, "x2": 2, "y_value": 10, "group": "A"},
+        {"x1": 2, "x2": 3, "y_value": 15, "group": "B"},
+        {"x1": 3, "x2": 4, "y_value": 7, "group": "A"},
+        {"x1": 4, "x2": 5, "y_value": 12, "group": "B"},
+        {"x1": 5, "x2": 6, "y_value": 17, "group": "A"},
+        {"x1": 6, "x2": 7, "y_value": 5, "group": "B"}
+    ],
+    "x_var": ["x1", "x2"],
+    "y_var": "y_value",
+    "hue": "group",
+    "title": "Sample Scatter Plot with Multiple X Variables"
+}
+
+### 4. Lineplot Demo - Single X Variable
+POST http://localhost:8000/api/eda/lineplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"time": 1, "value": 10},
+        {"time": 2, "value": 15},
+        {"time": 3, "value": 7},
+        {"time": 4, "value": 12},
+        {"time": 5, "value": 17},
+        {"time": 6, "value": 5},
+        {"time": 7, "value": 14},
+        {"time": 8, "value": 9},
+        {"time": 9, "value": 11}
+    ],
+    "x_var": ["time"],
+    "y_var": "value",
+    "hue": "-",
+    "style": "-",
+    "legend": true,
+    "title": "Sample Line Plot"
+}
+
+### 4. Lineplot Demo - Multiple X Variables
+POST http://localhost:8000/api/eda/lineplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"time1": 1, "time2": 2, "value": 10},
+        {"time1": 2, "time2": 3, "value": 15},
+        {"time1": 3, "time2": 4, "value": 7},
+        {"time1": 4, "time2": 5, "value": 12},
+        {"time1": 5, "time2": 6, "value": 17},
+        {"time1": 6, "time2": 7, "value": 5}
+    ],
+    "x_var": ["time1", "time2"],
+    "y_var": "value",
+    "hue": "-",
+    "style": "-",
+    "legend": true,
+    "title": "Sample Line Plot with Multiple X Variables"
+}
+
+### 5. Pie Plot Demo - Single Categorical Variable
+POST http://localhost:8000/api/eda/pieplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category": "A"},
+        {"category": "B"},
+        {"category": "C"},
+        {"category": "A"},
+        {"category": "B"},
+        {"category": "C"},
+        {"category": "A"},
+        {"category": "B"},
+        {"category": "A"}
+    ],
+    "cat": ["category"],
+    "gap": 0.05,
+    "title": "Sample Pie Plot",
+    "label": true,
+    "percentage": true
+}
+
+### 5. Pie Plot Demo - Multiple Categorical Variables
+POST http://localhost:8000/api/eda/pieplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category1": "A", "category2": "X"},
+        {"category1": "B", "category2": "Y"},
+        {"category1": "C", "category2": "Z"},
+        {"category1": "A", "category2": "X"},
+        {"category1": "B", "category2": "Y"},
+        {"category1": "C", "category2": "Z"},
+        {"category1": "A", "category2": "X"},
+        {"category1": "B", "category2": "Y"},
+        {"category1": "C", "category2": "Z"}
+    ],
+    "cat": ["category1", "category2"],
+    "gap": 0.05,
+    "title": "Sample Pie Plot with Multiple Categories",
+    "label": true,
+    "percentage": true
+}
+
+### 6. Countplot Demo - Single Categorical Variable
+POST http://localhost:8000/api/eda/countplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category": "A", "sub_category": "X"},
+        {"category": "B", "sub_category": "Y"},
+        {"category": "A", "sub_category": "X"},
+        {"category": "C", "sub_category": "Z"},
+        {"category": "B", "sub_category": "Y"},
+        {"category": "A", "sub_category": "Z"},
+        {"category": "C", "sub_category": "X"},
+        {"category": "B", "sub_category": "Y"},
+        {"category": "C", "sub_category": "Z"}
+    ],
+    "cat": ["category"],
+    "title": "Sample Count Plot",
+    "hue": "sub_category",
+    "orient": "Vertical",
+    "annotate": true
+}
+
+### 6. Countplot Demo - Multiple Categorical Variables
+POST http://localhost:8000/api/eda/countplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category1": "A", "category2": "X"},
+        {"category1": "B", "category2": "Y"},
+        {"category1": "A", "category2": "X"},
+        {"category1": "C", "category2": "Z"},
+        {"category1": "B", "category2": "Y"},
+        {"category1": "A", "category2": "Z"},
+        {"category1": "C", "category2": "X"},
+        {"category1": "B", "category2": "Y"},
+        {"category1": "C", "category2": "Z"}
+    ],
+    "cat": ["category1", "category2"],
+    "title": "Sample Count Plot with Multiple Categories",
+    "hue": "category2",
+    "orient": "Vertical",
+    "annotate": true
+}
+
+### 7. Boxplot Demo - Single Categorical Variable
+POST http://localhost:8000/api/eda/boxplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category": "A", "value": 10},
+        {"category": "B", "value": 15},
+        {"category": "A", "value": 7},
+        {"category": "C", "value": 12},
+        {"category": "B", "value": 17},
+        {"category": "C", "value": 5},
+        {"category": "A", "value": 14},
+        {"category": "B", "value": 9},
+        {"category": "C", "value": 11}
+    ],
+    "cat": ["category"],
+    "num": "value",
+    "hue": "-",
+    "orient": "Vertical",
+    "dodge": true,
+    "title": "Sample Box Plot"
+}
+
+### 7. Boxplot Demo - Multiple Categorical Variables
+POST http://localhost:8000/api/eda/boxplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category1": "A", "category2": "X", "value": 10},
+        {"category1": "B", "category2": "Y", "value": 15},
+        {"category1": "A", "category2": "X", "value": 7},
+        {"category1": "C", "category2": "Z", "value": 12},
+        {"category1": "B", "category2": "Y", "value": 17},
+        {"category1": "C", "category2": "Z", "value": 5},
+        {"category1": "A", "category2": "X", "value": 14},
+        {"category1": "B", "category2": "Y", "value": 9},
+        {"category1": "C", "category2": "Z", "value": 11}
+    ],
+    "cat": ["category1", "category2"],
+    "num": "value",
+    "hue": "-",
+    "orient": "Vertical",
+    "dodge": true,
+    "split": false,
+    "title": "Sample Box Plot with Multiple Categories"
+}
+
+### 8. Violinplot Demo - Single Categorical Variable
+POST http://localhost:8000/api/eda/violinplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category": "A", "value": 10, "group": "G1"},
+        {"category": "B", "value": 15, "group": "G2"},
+        {"category": "A", "value": 7, "group": "G1"},
+        {"category": "C", "value": 12, "group": "G2"},
+        {"category": "B", "value": 17, "group": "G1"},
+        {"category": "C", "value": 5, "group": "G2"},
+        {"category": "A", "value": 14, "group": "G1"},
+        {"category": "B", "value": 9, "group": "G2"},
+        {"category": "C", "value": 11, "group": "G1"}
+    ],
+    "cat": ["category"],
+    "num": "value",
+    "hue": "group",
+    "orient": "Vertical",
+    "dodge": true,
+    "split": false,
+    "title": "Sample Violin Plot"
+}
+
+### 8. Violinplot Demo - Multiple Categorical Variables
+POST http://localhost:8000/api/eda/violinplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"category1": "A", "category2": "X", "value": 10, "group": "G1"},
+        {"category1": "B", "category2": "Y", "value": 15, "group": "G2"},
+        {"category1": "A", "category2": "X", "value": 7, "group": "G1"},
+        {"category1": "C", "category2": "Z", "value": 12, "group": "G2"},
+        {"category1": "B", "category2": "Y", "value": 17, "group": "G1"},
+        {"category1": "C", "category2": "Z", "value": 5, "group": "G2"},
+        {"category1": "A", "category2": "X", "value": 14, "group": "G1"},
+        {"category1": "B", "category2": "Y", "value": 9, "group": "G2"},
+        {"category1": "C", "category2": "Z", "value": 11, "group": "G1"}
+    ],
+    "cat": ["category1", "category2"],
+    "num": "value",
+    "hue": "group",
+    "orient": "Vertical",
+    "dodge": true,
+    "split": false,
+    "title": "Sample Violin Plot with Multiple Categories"
+}
+
+### 9. Regplot Demo - Single X Variable
+POST http://localhost:8000/api/eda/regplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"x_var1": 1, "y_var": 2},
+        {"x_var1": 2, "y_var": 3},
+        {"x_var1": 3, "y_var": 5},
+        {"x_var1": 4, "y_var": 4},
+        {"x_var1": 5, "y_var": 6},
+        {"x_var1": 6, "y_var": 7},
+        {"x_var1": 7, "y_var": 8},
+        {"x_var1": 8, "y_var": 7},
+        {"x_var1": 9, "y_var": 9}
+    ],
+    "x_var": ["x_var1"],
+    "y_var": "y_var",
+    "title": "Sample Regression Plot",
+    "scatter": true
+}
+
+### 9. Regplot Demo - Multiple X Variables
+POST http://localhost:8000/api/eda/regplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"x_var1": 1, "x_var2": 2, "y_var": 10, "group": "A"},
+        {"x_var1": 2, "x_var2": 3, "y_var": 15, "group": "B"},
+        {"x_var1": 3, "x_var2": 4, "y_var": 7, "group": "A"},
+        {"x_var1": 4, "x_var2": 5, "y_var": 12, "group": "B"},
+        {"x_var1": 5, "x_var2": 6, "y_var": 17, "group": "A"},
+        {"x_var1": 6, "x_var2": 7, "y_var": 5, "group": "B"},
+        {"x_var1": 7, "x_var2": 8, "y_var": 14, "group": "A"},
+        {"x_var1": 8, "x_var2": 9, "y_var": 9, "group": "B"},
+        {"x_var1": 9, "x_var2": 10, "y_var": 11, "group": "A"}
+    ],
+    "x_var": ["x_var1", "x_var2"],
+    "y_var": "y_var",
+    "title": "Sample Regression Plot with Multiple X Variables",
+    "scatter": true
+}
+
+### 10. Custom Plot Demo - Single X Variable
+POST http://localhost:8000/api/eda/customplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"feature1": 1, "value": 10, "group": "A"},
+        {"feature1": 2, "value": 15, "group": "B"},
+        {"feature1": 3, "value": 7, "group": "A"},
+        {"feature1": 4, "value": 12, "group": "B"},
+        {"feature1": 5, "value": 17, "group": "A"},
+        {"feature1": 6, "value": 5, "group": "B"}
+    ],
+    "x_var": ["feature1"],
+    "y_var": "value",
+    "hue": "group",
+    "title": "Sample Custom Plot"
+}
+
+### 10. Custom Plot Demo - Multiple X Variables
+POST http://localhost:8000/api/eda/customplot/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "file": [
+        {"feature1": 1, "feature2": 2, "value": 10, "group": "A"},
+        {"feature1": 2, "feature2": 3, "value": 15, "group": "B"},
+        {"feature1": 3, "feature2": 4, "value": 7, "group": "A"},
+        {"feature1": 4, "feature2": 5, "value": 12, "group": "B"},
+        {"feature1": 5, "feature2": 6, "value": 17, "group": "A"},
+        {"feature1": 6, "feature2": 7, "value": 5, "group": "B"}
+    ],
+    "x_var": ["feature1", "feature2"],
+    "y_var": "value",
+    "hue": "group",
+    "title": "Sample Custom Plot with Multiple X Variables"
+}

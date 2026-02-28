@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MatFlow Documentation</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Sidebar Navigation -->
+      <aside class="sidebar">
+        <h2>MatFlow Documentation</h2>
+        <nav>
+          <ul>
+            <li>
+              <span class="collapsible">Dataset</span>
+              <ul class="nested">
+                <li><a href="#upload">Upload Files</a></li>
+                <li><a href="#display">Display Dataset</a></li>
+                <li><a href="#information">Dataset Information</a></li>
+                <li><a href="#statistics">Dataset Statistics</a></li>
+                <li><a href="#correlation">Feature Correlation</a></li>
+                <li><a href="#duplicate">Duplicate Check</a></li>
+                <li><a href="#group">Group Data</a></li>
+              </ul>
+            </li>
+            <li>
+              <span class="collapsible">Exploratory Data Analysis (EDA)</span>
+              <ul class="nested">
+                <li><a href="#bar-plot">Bar Plot</a></li>
+                <li><a href="#pie-plot">Pie Plot</a></li>
+                <li><a href="#histogram">Histogram</a></li>
+                <li><a href="#box-plot">Box Plot</a></li>
+                <li><a href="#violin-plot">Violin Plot</a></li>
+                <li><a href="#scatter-plot">Scatter Plot</a></li>
+                <li><a href="#reg-plot">Regression Plot</a></li>
+                <li><a href="#line-plot">Line Plot</a></li>
+              </ul>
+            </li>
+            <li>
+              <span class="collapsible">Feature Engineering</span>
+              <ul class="nested">
+                <li><a href="#add-modify">Add/Modify</a></li>
+                <li><a href="#change-dtype">Change Dtype</a></li>
+                <li><a href="#imputation">Imputation</a></li>
+                <li><a href="#encoding">Encoding</a></li>
+                <li><a href="#scaling">Scaling</a></li>
+                <li><a href="#drop-column">Drop Column</a></li>
+                <li><a href="#merge-dataset">Merge Dataset</a></li>
+              </ul>
+            </li>
+          </ul>
+        </nav>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="content">
+        <!-- Dataset Section -->
+        <section id="upload">
+          <h1>Upload Files</h1>
+          <img src="images/upload.png" alt="Upload Files" />
+          <p>
+            This feature allows users to upload CSV or Excel files. Select a
+            folder to organize your data files or upload directly to the root
+            directory. Once a file is uploaded, you can use it for further
+            analysis functions.
+          </p>
+        </section>
+
+        <section id="display">
+          <h1>Display Dataset</h1>
+          <img src="images/display.png" alt="Display Dataset" />
+          <p>
+            The Display option shows the content of the selected dataset,
+            providing a preview of the data to ensure correct formatting and
+            structure.
+          </p>
+        </section>
+
+        <section id="information">
+          <h1>Dataset Information</h1>
+          <img src="images/information.png" alt="Dataset Information" />
+          <p>
+            This feature displays metadata about the dataset, such as unique
+            values, non-null counts, null percentages, and data types for each
+            column. It also provides memory usage details.
+          </p>
+        </section>
+
+        <section id="statistics">
+          <h1>Dataset Statistics</h1>
+          <img src="images/statistics.png" alt="Dataset Statistics" />
+          <p>
+            View summary statistics for each column, including count, mean,
+            standard deviation, min, max, and percentiles. This helps in
+            understanding the distribution and scale of your data.
+          </p>
+        </section>
+
+        <section id="correlation">
+          <h1>Feature Correlation</h1>
+          <img src="images/correlation.png" alt="Feature Correlation" />
+          <p>
+            The Correlation feature calculates correlation coefficients between
+            columns using methods like Pearson and Spearman. Visualize results
+            as a table or heatmap.
+          </p>
+        </section>
+
+        <section id="duplicate">
+          <h1>Duplicate Check</h1>
+          <img src="images/duplicate.png" alt="Duplicate Check" />
+          <p>
+            Identify duplicate rows in the dataset. Filter by column to detect
+            duplicates in specific attributes, ensuring data integrity.
+          </p>
+        </section>
+
+        <section id="group">
+          <h1>Group Data</h1>
+          <img src="images/group.png" alt="Group Data" />
+          <p>
+            Group data based on selected columns and apply aggregate functions
+            (e.g., count, mean) to analyze grouped data meaningfully.
+          </p>
+        </section>
+
+        <!-- EDA Section -->
+        <section id="eda">
+          <h1>Exploratory Data Analysis (EDA)</h1>
+          <div id="bar-plot">
+            <h2>Bar Plot</h2>
+            <img src="images/bar_plot.png" alt="Bar Plot" />
+            <p>
+              Visualize categorical data by plotting bar heights based on a
+              numerical variable. Customize by adding a hue or changing
+              orientation.
+            </p>
+          </div>
+          <div id="pie-plot">
+            <h2>Pie Plot</h2>
+            <img src="images/pie_plot.png" alt="Pie Plot" />
+            <p>
+              Create a pie chart for a categorical variable. Use labels,
+              percentages, or explode a specific slice for emphasis.
+            </p>
+          </div>
+          <div id="histogram">
+            <h2>Histogram</h2>
+            <img src="images/histogram.png" alt="Histogram" />
+            <p>
+              View the distribution of numerical data. Enable KDE overlay or
+              customize bins and orientation.
+            </p>
+          </div>
+          <div id="scatter-plot">
+            <h2>Scatter Plot</h2>
+            <img src="images/scatter_plot.png" alt="Scatter Plot" />
+            <p>
+              Visualize relationships between numerical variables. Add hue to
+              represent categories.
+            </p>
+          </div>
+        </section>
+
+        <!-- Feature Engineering -->
+        <section id="feature-engineering">
+          <h2 style="margin-top: 40px; margin-bottom: 20px; color: #2a3d2f">
+            Feature Engineering
+          </h2>
+
+          <section
+            id="add-modify"
+            style="
+              margin-bottom: 30px;
+              padding: 15px;
+              background-color: #f9f9f9;
+              border-radius: 8px;
+              box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+            "
+          >
+            <h3 style="margin-bottom: 15px; color: #2a3d2f">Add/Modify</h3>
+            <p style="margin-bottom: 20px">
+              This section allows users to create, modify, or add new features
+              to the dataset. The following options and methods are available:
+            </p>
+
+            <h4 style="margin-top: 20px; margin-bottom: 10px; color: #2a3d2f">
+              1. Add New Column
+            </h4>
+            <p style="margin-bottom: 10px">
+              Create a new column in the dataset and populate it using one of
+              the following methods:
+            </p>
+            <ul style="margin-left: 20px; margin-bottom: 20px">
+              <li style="margin-bottom: 10px">
+                <strong>New Column:</strong> Add a completely new column with a
+                static value or other predefined data.
+                <br />
+                <em>Example:</em> Create a column named <code>Status</code> and
+                populate it with the value <code>Active</code>.
+              </li>
+              <li style="margin-bottom: 10px">
+                <strong>Math Operation:</strong> Derive a new column using
+                mathematical expressions involving one or more existing columns.
+                <br />
+                <em>Example:</em> Create a column <code>Area</code> using the
+                formula <code>Length * Width</code>.
+              </li>
+              <li style="margin-bottom: 10px">
+                <strong>Extract Text:</strong> Extract specific patterns from
+                text-based columns using regular expressions (regex).
+                <br />
+                <em>Example:</em> Extract uppercase abbreviations using the
+                regex pattern <code>[A-Z]{2,}</code>.
+              </li>
+              <li style="margin-bottom: 10px">
+                <strong>Group Numerical:</strong> Bin a numerical column into
+                ranges or groups.
+                <br />
+                <em>Example:</em> Divide the column <code>Age</code> into ranges
+                like <code>0-20</code>, <code>21-40</code>, and
+                <code>41-60</code>.
+              </li>
+              <li style="margin-bottom: 10px">
+                <strong>Group Categorical:</strong> Combine multiple categorical
+                values into a single group.
+                <br />
+                <em>Example:</em> Combine values like <code>Small</code>,
+                <code>Medium</code>, and <code>Large</code> into a group called
+                <code>Size</code>.
+              </li>
+            </ul>
+
+            <h4 style="margin-top: 20px; margin-bottom: 10px; color: #2a3d2f">
+              2. Save as New Dataset
+            </h4>
+            <p style="margin-bottom: 20px">
+              Save the modified dataset as a new file without overwriting the
+              original dataset.
+            </p>
+            <ul style="margin-left: 20px; margin-bottom: 20px">
+              <li>
+                <strong>New Dataset Name:</strong> Specify the name for the new
+                dataset that includes the modified features.
+              </li>
+            </ul>
+
+            <!-- Modify Option -->
+            <h4 style="margin-top: 30px; margin-bottom: 10px; color: #2a3d2f">
+              Modify Option
+            </h4>
+            <p style="margin-bottom: 20px">
+              Modify existing columns or data within the dataset using the
+              following methods:
+            </p>
+            <ul style="margin-left: 20px; margin-bottom: 20px">
+              <li style="margin-bottom: 10px">
+                <strong>Progress Apply:</strong> Apply advanced computations to
+                your dataset with specific functions.
+                <ul
+                  style="
+                    margin-left: 20px;
+                    margin-top: 10px;
+                    margin-bottom: 10px;
+                  "
+                >
+                  <li>
+                    <strong>Compute All Features Using RDKit:</strong> Calculate
+                    molecular features using RDKit.
+                  </li>
+                  <li>
+                    <strong>Chem.inchi.toLenchikey:</strong> Convert InChI
+                    chemical structures to their hashed InChIKey
+                    representations.
+                  </li>
+                </ul>
+              </li>
+              <li style="margin-bottom: 10px">
+                <strong>Replace Value:</strong> Replace specific values in a
+                column with a new value.
+                <br />
+                <em>Example:</em> Replace all occurrences of
+                <code>NULL</code> in the <code>Status</code> column with
+                <code>Unknown</code>.
+              </li>
+            </ul>
+
+            <h4 style="margin-top: 20px; margin-bottom: 10px; color: #2a3d2f">
+              3. Add to Pipeline
+            </h4>
+            <p style="margin-bottom: 20px">
+              Add transformations to a pipeline for reproducibility. This is
+              especially useful for consistent preprocessing across multiple
+              datasets.
+            </p>
+            <ul style="margin-left: 20px; margin-bottom: 20px">
+              <li>
+                <strong>Show Sample:</strong> Preview a small sample of the
+                modified dataset with the applied operations.
+              </li>
+            </ul>
+
+            <h4 style="margin-top: 20px; margin-bottom: 10px; color: #2a3d2f">
+              Screenshots
+            </h4>
+            <div
+              style="
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+                margin-bottom: 30px;
+              "
+            >
+              <!-- Screenshot: Add New Column -->
+              <div
+                style="
+                  flex: 1 1 calc(50% - 20px);
+                  text-align: center;
+                  border: 1px solid #ddd;
+                  border-radius: 8px;
+                  display: flex;
+                  flex-direction: column;
+                  padding: 15px;
+                  background-color: #fff;
+                  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+                "
+              >
+                <img
+                  src="images/add_new_column.png"
+                  alt="Add New Column"
+                  style="
+                    width: 100%;
+                    max-width: 650px;
+                    height: auto;
+                    margin-bottom: 10px;
+                  "
+                />
+                <strong style="color: #2a3d2f"
+                  >Add New Column - New Column</strong
+                >
+              </div>
+
+              <!-- Screenshot: Math Operation -->
+              <div
+                style="
+                  flex: 1 1 calc(50% - 20px);
+                  text-align: center;
+                  border: 1px solid #ddd;
+                  border-radius: 8px;
+                  display: flex;
+                  flex-direction: column;
+                  padding: 15px;
+                  background-color: #fff;
+                  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+                "
+              >
+                <img
+                  src="images/add_math_operation.png"
+                  alt="Math Operation"
+                  style="
+                    width: 100%;
+                    max-width: 650px;
+                    height: auto;
+                    margin-bottom: 10px;
+                  "
+                />
+                <strong style="color: #2a3d2f"
+                  >Add New Column - Math Operation</strong
+                >
+              </div>
+
+              <!-- Screenshot: Extract Text -->
+              <div
+                style="
+                  flex: 1 1 calc(50% - 20px);
+                  text-align: center;
+                  border: 1px solid #ddd;
+                  display: flex;
+                  flex-direction: column;
+                  border-radius: 8px;
+                  padding: 15px;
+                  background-color: #fff;
+                  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+                "
+              >
+                <img
+                  src="images/add_extract_text.png"
+                  alt="Extract Text"
+                  style="
+                    width: 100%;
+                    max-width: 650px;
+                    height: auto;
+                    margin-bottom: 10px;
+                  "
+                />
+                <strong style="color: #2a3d2f"
+                  >Add New Column - Extract Text</strong
+                >
+              </div>
+
+              <!-- Screenshot: Group Numerical -->
+              <div
+                style="
+                  flex: 1 1 calc(50% - 20px);
+                  text-align: center;
+                  border: 1px solid #ddd;
+                  display: flex;
+                  flex-direction: column;
+                  border-radius: 8px;
+                  padding: 15px;
+                  background-color: #fff;
+                  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+                "
+              >
+                <img
+                  src="images/add_group_numerical.png"
+                  alt="Group Numerical"
+                  style="
+                    width: 100%;
+                    max-width: 650px;
+                    height: auto;
+                    margin-bottom: 10px;
+                  "
+                />
+                <strong style="color: #2a3d2f"
+                  >Add New Column - Group Numerical</strong
+                >
+              </div>
+
+              <!-- Screenshot: Group Categorical -->
+              <div
+                style="
+                  flex: 0 0 calc(50% - 20px);
+                  text-align: center;
+                  display: flex;
+                  flex-direction: column;
+                  border: 1px solid #ddd;
+                  border-radius: 8px;
+                  padding: 15px;
+                  background-color: #fff;
+                  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+                "
+              >
+                <img
+                  src="images/add_group_categorical.png"
+                  alt="Group Categorical"
+                  style="
+                    width: 100%;
+                    max-width: 650px;
+                    height: auto;
+                    margin-bottom: 10px;
+                  "
+                />
+                <strong style="color: #2a3d2f"
+                  >Add New Column - Group Categorical</strong
+                >
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="change-dtype"
+            style="
+              margin-bottom: 30px;
+              padding: 15px;
+              background-color: #f9f9f9;
+              border-radius: 8px;
+              box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+            "
+          >
+            <h3 style="margin-bottom: 15px; color: #2a3d2f">Change Dtype</h3>
+            <p style="margin-bottom: 20px">
+              The <strong>Change Dtype</strong> feature allows users to change
+              the data type of one or more columns in the dataset. This is
+              particularly useful for optimizing memory usage or ensuring
+              compatibility with specific algorithms and computations.
+            </p>
+
+            <h4 style="margin-bottom: 10px; color: #2a3d2f">Example</h4>
+            <p style="margin-left: 20px; margin-bottom: 20px">
+              Suppose you have columns <code>SepalLengthCm</code> and
+              <code>PetalWidthCm</code> stored as 64-bit floating-point numbers.
+              You can change their types to 32-bit integers for memory
+              efficiency while ensuring compatibility with downstream tasks.
+            </p>
+
+            <h4 style="margin-bottom: 10px; color: #2a3d2f">Screenshots</h4>
+            <div
+              style="
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+                margin-bottom: 30px;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  flex-direction: column;
+                  text-align: center;
+                  border: 1px solid #ddd;
+                  border-radius: 8px;
+                  padding: 15px;
+                  background-color: #fff;
+                  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+                "
+              >
+                <img
+                  src="images/change_dtype.png"
+                  alt="Change Dtype"
+                  style="
+                    width: 100%;
+                    max-width: 650px;
+                    height: auto;
+                    margin-bottom: 10px;
+                  "
+                />
+                <strong style="color: #2a3d2f">Change Dtype Interface</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <!-- JavaScript for Sidebar -->
+    <script>
+      document.querySelectorAll(".collapsible").forEach((button) => {
+        button.addEventListener("click", () => {
+          button.classList.toggle("active");
+          const content = button.nextElementSibling;
+          content.style.display =
+            content.style.display === "block" ? "none" : "block";
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,117 @@
+# Cursor Rules for MLFlow Project
+
+## Project Overview
+- **MLflow** is the main page/platform (landing page at `/`)
+- **Services** are sub-applications within MLflow, each with their own centralized API:
+  - **Matflow** (`/matflow`) - No-code ML with visual workflows
+  - Each service has its own API service: `apiService.matflow.*`, `mlflowApi.*`, etc.
+  - Use centralized API services instead of direct `fetch` calls
+
+## Project Structure
+- **Server**: Django backend in `server/` directory
+  - `Matflow/`: Main Django project settings
+  - Service apps: `matflow_test/`, `chatbot/`, `eda/`, `dataset_manager/`, `molecules/`, `pso/`, `pfs/`, etc.
+- **Client**: React frontend in `client/` directory
+  - API services: `client/src/services/api/` (matflowApi.js, mlflowApi.js, apiService.js)
+  - Main routes: `/` (MLflow landing), `/matflow` (Matflow service), `/dashboard`, `/editor`, etc.
+
+## Server Commands
+- ALWAYS make sure you are inside the `server` directory before running any server commands.
+- ALWAYS activate the conda environment: `conda activate venv` before any Django command.
+- Use PowerShell-compatible syntax (use `;` instead of `&&` if needed) for chaining commands.
+
+## Package Installation & Troubleshooting
+
+### Critical Installation Rules
+- **NEVER** run `pip install -r requirements.txt` if it causes "resolution-too-deep" errors
+- **ALWAYS** install missing packages individually or in small batches
+- **ALWAYS** check for dependency conflicts before installing large packages
+- **ALWAYS** use conda for NumPy on Windows if DLL errors occur
+
+### Common Installation Issues & Solutions
+
+#### Resolution-Too-Deep Error
+- **Problem:** `pip install -r requirements.txt` fails with dependency resolution errors
+- **Solution:** Install only missing packages, not the entire requirements.txt
+- **Prevention:** Check installed packages first, install missing ones only
+
+#### PyTorch Installation Issues
+- **Problem:** `AttributeError: module 'torch._C' has no attribute 'TensorBase'`
+- **Solution:** Reinstall from official PyTorch repo: `pip install torch==2.0.1 torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu`
+- **Note:** Close all Python processes before reinstalling
+
+#### TensorFlow/Keras Import Errors
+- **Problem:** `ModuleNotFoundError: No module named 'tensorflow.compat'`
+- **Solution:** Reinstall TensorFlow: `pip uninstall tensorflow tensorflow-intel -y && pip install tensorflow==2.15.0`
+- **Note:** TensorFlow 2.15.0 requires protobuf < 5.0.0
+
+#### NumPy DLL Errors (Windows)
+- **Problem:** `DLL load failed while importing _multiarray_umath`
+- **Solution:** Use conda: `conda install -y numpy=1.26.4 -c conda-forge`
+- **Note:** pip may fail due to locked files, conda handles Windows DLLs better
+
+#### Dependency Version Conflicts
+- **Problem:** Protobuf, opentelemetry-proto, grpcio-status conflicts
+- **Solution:** Install compatible versions: `pip install "protobuf>=4.25.0,<5.0.0" "opentelemetry-proto>=1.9.0,<1.30.0" "grpcio-status<1.60.0,>=1.33.2"`
+- **Note:** TensorFlow 2.15.0 requires protobuf < 5.0.0, but newer packages want >= 5.0
+
+## API Architecture
+- **Frontend**: Use centralized API services (`apiService.matflow.*`, `mlflowApi.*`) - NO direct `fetch` calls
+- **Backend**: API endpoints use `@csrf_exempt` decorator (CSRF handled via tokens in headers)
+- **FormData**: Don't set `Content-Type` header - browser sets it automatically with boundary
+
+## Common Pitfalls & Solutions
+
+### Django Views vs Helper Functions
+- **Helper functions** are utility functions (e.g., `convert_to_csv_helper(input_file)`)
+- **Django views** must:
+  - Take `request` as first parameter
+  - Use `@csrf_exempt` decorator for API endpoints
+  - Return `JsonResponse` or `FileResponse`
+- If a URL route points to a function, it MUST be a Django view, not a helper
+
+### JSON Parsing
+- Be defensive: Check if data is string before `JSON.parse()`
+- Example: `const parsed = typeof data === 'string' ? JSON.parse(data) : data;`
+
+### CSRF Tokens
+- API endpoints use `@csrf_exempt` on server side
+- Client uses `apiClient.js` which handles CSRF tokens automatically
+- For FormData requests, CSRF token is read from cookies and sent in `X-CSRFToken` header
+
+### Code Quality
+- Avoid duplicate variable/import declarations
+- Check for orphaned `else` blocks (ensure matching `if` statements)
+- Use relative imports correctly (count directory levels: `../../../` for 3 levels up)
+
+## UI Theme & Design Standards
+
+### Color Scheme (MLflow Admin Dashboard Theme)
+- **Primary Blue**: `#3b82f6` (buttons, active states, accents)
+- **Primary Hover**: `#2563eb` (button hover states)
+- **Secondary Blue**: `#2563eb` (gradients, secondary accents)
+- **Background**: `#ffffff` (white) for main content, `#f9fafb` (gray-50) for page backgrounds
+- **Text**: `#374151` (gray-700) for primary text, `#6b7280` (gray-600) for secondary text
+- **Borders**: `#d1d5db` (gray-300) for default, `#e5e7eb` (gray-200) for subtle dividers
+- **Top Bar Gradient**: `linear-gradient(to right, #3b82f6, #2563eb)`
+
+### Component Styling Guidelines
+- **Sidebars**: White background (`bg-white`) with gray borders (`border-gray-200`)
+- **Buttons**: Primary blue (`bg-[#3b82f6]`) with white text, hover state `bg-[#2563eb]`
+- **Dropdowns/Selects**: White background, gray borders, blue focus state (`border-[#3b82f6]`)
+- **Active/Selected States**: Blue background with white text or blue text with light blue background tint
+- **Hover States**: Light blue tint `rgba(59, 130, 246, 0.1)` for subtle feedback
+
+### Z-Index Guidelines
+- **Modals**: Use `z-[9999]` for backdrop, `z-[10000]` for modal content to ensure they appear above all other UI elements
+- **Fixed Navigation**: `z-50` (standard navbar/topbar)
+- **Chatbot/Floating Elements**: `z-50` or lower than modals
+
+### Consistency Requirements
+- **ALL services** (Matflow and any future services) must use the MLflow admin dashboard theme
+- Use same color values across all components and services (no variations)
+- Ensure text colors have proper contrast on light backgrounds (dark text, not white)
+- Remove any dark green backgrounds (`#064f32`, `#06603b`) - use white/light gray instead
+- Use blue color scheme (`#3b82f6` primary, `#2563eb` hover) instead of green for all MLflow platform components
+- When adding new services, apply these theme standards from the start
+

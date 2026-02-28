@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="160"
+  height="32"
+  viewBox="0 0 160 32"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">Matflow Logo</title>
+  <desc id="desc">Professional M logomark with Matflow wordmark</desc>
+
+  <!-- Monogram M (same geometry as MLflow for platform consistency) -->
+  <g transform="translate(4,4)">
+    <path
+      d="M4 22V4h3.5l4.25 9.5L20 4h3.5v18h-3.2V10.4L12.75 20h-1.5L7.2 10.4V22z"
+      fill="#2563eb"
+    />
+  </g>
+
+  <!-- Wordmark -->
+  <g
+    fill="#2563eb"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="14"
+    font-weight="700"
+    letter-spacing="2.5"
+    transform="translate(44,21)"
+  >
+    <text>MATFLOW</text>
+  </g>
+</svg>
+
+

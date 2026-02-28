@@ -1,0 +1,765 @@
+import React, { useState, useEffect, useRef } from "react";
+import { 
+  Typography, 
+  TextField,
+  Button,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Switch,
+  FormControlLabel as MuiFormControlLabel,
+  Grid,
+  Card,
+  CardMedia,
+  CardContent,
+  Box
+} from "@mui/material";
+import { Progress, Modal } from "@nextui-org/react";
+import { toast } from "react-toastify";
+import SingleDropDown from "../../../Components/SingleDropDown/SingleDropDown";
+import AgGridAutoDataComponent from "../../../Components/AgGridComponent/AgGridAutoDataComponent";
+import Docs from "../../../../Docs/Docs";
+
+function SMILESMolecularStructure({ csvData }) {
+  // Configuration state
+  const [smilesColumn, setSmilesColumn] = useState("");
+  const [processingMode, setProcessingMode] = useState("batch"); // batch, individual
+  const [imageSize, setImageSize] = useState(300);
+  const [imageFormat, setImageFormat] = useState("png"); // png, svg
+  const [generatePDF, setGeneratePDF] = useState(true);
+  const [maxImages, setMaxImages] = useState(100);
+  
+  // Individual SMILES input
+  const [singleSMILES, setSingleSMILES] = useState("");
+  
+  // UI state
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentProcessing, setCurrentProcessing] = useState("");
+  const [results, setResults] = useState(null);
+  const [taskId, setTaskId] = useState(null);
+  const [visible, setVisible] = useState(false);
+  const [previewImages, setPreviewImages] = useState([]);
+  
+  // For polling
+  const pollIntervalRef = useRef(null);
+
+  const openModal = () => setVisible(true);
+  const closeModal = () => setVisible(false);
+
+  // Get available columns for SMILES
+  const availableColumns = csvData ? Object.keys(csvData[0]) : [];
+
+  // Progress simulation
+  useEffect(() => {
+    if (loading) {
+      setProgress(0);
+      const interval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev + 2 < 95) return prev + 2;
+          return 95;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [loading]);
+
+  // Start polling for task status
+  const startPolling = (taskId) => {
+    // Immediately check the task status once
+    checkTaskStatus(taskId);
+    
+    // Then set up polling every 3 seconds
+    pollIntervalRef.current = setInterval(() => {
+      checkTaskStatus(taskId);
+    }, 3000);
+  };
+
+  // Process successful response data
+  const processSuccessResponse = (data) => {
+    // Extract results data, handling different response formats
+    let results = data.results || {};
+    
+    // Get preview images from the response
+    let previewImages = [];
+    
+    // Handle different response formats - Check for preview_images array first
+    if (Array.isArray(data.preview_images)) {
+      console.log("Found preview_images array at top level:", data.preview_images);
+      previewImages = data.preview_images;
+    } else if (Array.isArray(results.preview_images)) {
+      console.log("Found preview_images array in results:", results.preview_images);
+      previewImages = results.preview_images;
+    } else if (typeof results === 'object' && results.preview_images) {
+      console.log("Found preview_images object in results:", results.preview_images);
+      previewImages = results.preview_images;
+    } else if (Array.isArray(results)) {
+      console.log("Results is an array:", results);
+      previewImages = results;
+    } 
+    // Handle case where results is an object with SMILES strings as keys and image paths as values
+    else if (typeof results === 'object' && Object.keys(results).length > 0) {
+      console.log("Results appears to be a map of SMILES to image paths");
+      
+      // Extract entries that look like file paths
+      const imagePaths = [];
+      Object.entries(results).forEach(([smiles, value]) => {
+        if (typeof value === 'string' && (value.includes('/media/') || value.includes('.png') || value.includes('.svg'))) {
+          console.log(`Found image path for SMILES ${smiles}: ${value}`);
+          imagePaths.push({
+            smiles: smiles,
+            path: value
+          });
+        }
+      });
+      
+      if (imagePaths.length > 0) {
+        console.log(`Extracted ${imagePaths.length} image paths from results`);
+        previewImages = imagePaths.map(item => item.path);
+        
+        // Also store SMILES to path mapping for later use
+        results.smilesMap = imagePaths.reduce((map, item) => {
+          map[item.path] = item.smiles;
+          return map;
+        }, {});
+      }
+    }
+    
+    // Calculate statistics - use explicit values from data when available
+    const totalSmiles = data.total || results?.summary?.total || previewImages.length || 0;
+    const validStructures = previewImages.length || 0;
+    
+    console.log(`Statistics calculation: total=${totalSmiles}, valid=${validStructures}`);
+    
+    // Create download links if they don't exist but we have image paths
+    let downloadLinks = results.download_links || {};
+    if (previewImages.length > 0 && !downloadLinks.images_zip) {
+      // These paths are relative to API URL, construct proper download URL
+      const structurePathMatch = previewImages[0].match(/\/media\/structures\/([^\/]+)/);
+      if (structurePathMatch && structurePathMatch[1]) {
+        const taskIdFromPath = structurePathMatch[1];
+        console.log(`Detected task ID from path: ${taskIdFromPath}`);
+        downloadLinks = {
+          ...downloadLinks,
+          images_zip: `/media/structures/${taskIdFromPath}/all_images.zip`,
+          pdf: `/media/structures/${taskIdFromPath}/structures.pdf`
+        };
+      }
+    }
+    
+    const processedResults = {
+      ...results,
+      preview_images: previewImages,
+      download_links: downloadLinks,
+      summary: {
+        total_smiles: totalSmiles,
+        valid_structures: validStructures, 
+        invalid_smiles: totalSmiles - validStructures,
+        success_rate: totalSmiles ? Math.round((validStructures / totalSmiles) * 100) : 0
+      }
+    };
+    
+    console.log("Processed results:", processedResults);
+    setResults(processedResults);
+    setCurrentProcessing("");
+    
+    // Set preview images if available
+    if (processedResults.preview_images && processedResults.preview_images.length > 0) {
+      console.log("Processing preview images:", processedResults.preview_images);
+      // If preview_images are file paths (strings) instead of objects with image_base64,
+      // create objects with image_url property for consistent handling
+      const processedPreviewImages = processedResults.preview_images.map((item, index) => {
+        if (typeof item === 'string') {
+          // It's a file path - ensure it has a leading slash for API URL concatenation
+          const fullPath = item.startsWith('/') ? 
+            item : // Already has leading slash
+            `/${item}`; // Add leading slash if missing
+          console.log(`Processing image path ${index}:`, fullPath);
+          
+          // Try to find SMILES for this path from our mapping
+          let smiles = `Structure ${index + 1}`;
+          if (processedResults.smilesMap && processedResults.smilesMap[item]) {
+            smiles = processedResults.smilesMap[item];
+          }
+          
+          return {
+            image_url: fullPath,
+            smiles: smiles,
+            valid: true
+          };
+        } else if (typeof item === 'object' && item !== null) {
+          // It's already an object
+          return item;
+        }
+        return null;
+      }).filter(Boolean).slice(0, 6); // Show first 6
+      
+      console.log("Setting preview images:", processedPreviewImages);
+      setPreviewImages(processedPreviewImages);
+    }
+    
+    toast.success("Molecular structure generation completed successfully!");
+    
+    // Log the final data for debugging
+    console.log("Final success data:", data);
+  };
+
+  // Check task status
+  const checkTaskStatus = async (taskId) => {
+    try {
+      console.log(`Checking task status for: ${taskId}`);
+      const response = await fetch(
+        `${import.meta.env.VITE_APP_API_URL}/api/smiles-structure/status/${taskId}/`,
+        { method: "GET" }
+      );
+      const data = await response.json();
+      console.log("Task status response:", data);
+      
+      if (data.status === "SUCCESS") {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        setLoading(false);
+        setProgress(100);
+        
+        console.log("Processing SUCCESS response:", data);
+        processSuccessResponse(data);
+      } else if (data.status === "FAILURE") {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        setLoading(false);
+        setProgress(100);
+        setCurrentProcessing("");
+        toast.error(data.error || "Structure generation failed");
+      } else if (data.status === "PENDING" || data.status === "STARTED") {
+        // Task is not ready yet, continue polling
+        console.log(`Task is ${data.status}, continuing to poll...`);
+        setCurrentProcessing(`Task is ${data.status}. Waiting for processing to begin...`);
+      } else if (data.status === "PROGRESS") {
+        // Update progress information
+        if (data.current && data.total) {
+          const progressPercent = (data.current / data.total) * 100;
+          setProgress(progressPercent);
+          setCurrentProcessing(`Generating ${data.current}/${data.total}: ${data.current_smiles || ''}`);
+        }
+      }
+    } catch (error) {
+      console.error("Polling error:", error);
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+      setLoading(false);
+      setProgress(100);
+      setCurrentProcessing("");
+      toast.error("Error checking generation status");
+    }
+  };
+
+  // Handle batch structure generation
+  const handleBatchGeneration = async () => {
+    if (!smilesColumn) {
+      toast.error("Please select a SMILES column");
+      return;
+    }
+
+    setLoading(true);
+    setResults(null);
+    setTaskId(null);
+    setPreviewImages([]);
+    setCurrentProcessing("Starting molecular structure generation...");
+
+    const requestData = {
+      mode: "batch",
+      dataset: csvData,
+      smiles_column: smilesColumn,
+      config: {
+        image_size: imageSize,
+        image_format: imageFormat,
+        generate_pdf: generatePDF,
+        max_images: maxImages
+      }
+    };
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_APP_API_URL}/api/smiles-structure/generate/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      const data = await response.json();
+      
+      if (response.ok && data.task_id) {
+        console.log("Received task_id:", data.task_id);
+        setTaskId(data.task_id);
+        startPolling(data.task_id);
+        toast.info("Molecular structure generation started. This may take several minutes...");
+      } else {
+        setLoading(false);
+        setProgress(100);
+        setCurrentProcessing("");
+        toast.error(data.error || "Failed to start generation");
+      }
+    } catch (error) {
+      setLoading(false);
+      setProgress(100);
+      setCurrentProcessing("");
+      toast.error("Error starting generation: " + error.message);
+    }
+  };
+
+  // Handle single SMILES structure generation
+  const handleSingleGeneration = async () => {
+    if (!singleSMILES.trim()) {
+      toast.error("Please enter a SMILES string");
+      return;
+    }
+
+    setLoading(true);
+    setResults(null);
+    setTaskId(null);
+    setPreviewImages([]);
+    setCurrentProcessing(`Generating structure for: ${singleSMILES}`);
+
+    const requestData = {
+      mode: "single",
+      smiles: singleSMILES.trim(),
+      config: {
+        image_size: imageSize,
+        image_format: imageFormat
+      }
+    };
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_APP_API_URL}/api/smiles-structure/generate/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        console.log("Single generation response:", data);
+        
+        // Check if this is a task ID or direct result
+        if (data.task_id) {
+          // It's an async task - start polling
+          console.log("Single generation returned task_id:", data.task_id);
+          setTaskId(data.task_id);
+          startPolling(data.task_id);
+          toast.info("Structure generation started...");
+        } else if (data.results) {
+          // Direct result without async task
+          setLoading(false);
+          setProgress(100);
+          setCurrentProcessing("");
+          setResults(data.results);
+          
+          // Set single image preview
+          if (data.results.image_base64) {
+            setPreviewImages([{
+              smiles: singleSMILES,
+              image_base64: data.results.image_base64,
+              valid: true
+            }]);
+          } else if (data.results.image_url) {
+            setPreviewImages([{
+              smiles: singleSMILES,
+              image_url: data.results.image_url,
+              valid: true
+            }]);
+          }
+          
+          toast.success("Molecular structure generated successfully!");
+        } else {
+          setLoading(false);
+          setProgress(100);
+          setCurrentProcessing("");
+          toast.warning("No results returned");
+        }
+      } else {
+        setLoading(false);
+        setProgress(100);
+        setCurrentProcessing("");
+        toast.error(data.error || "Failed to generate structure");
+      }
+    } catch (error) {
+      setLoading(false);
+      setProgress(100);
+      setCurrentProcessing("");
+      toast.error("Error generating structure: " + error.message);
+    }
+  };
+
+  // Download function for images and PDF
+  const handleDownload = (url, filename) => {
+    console.log(`Downloading from URL: ${url}, filename: ${filename}`);
+    const link = document.createElement('a');
+    
+    // Ensure URL is absolute
+    if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+      link.href = `${import.meta.env.VITE_APP_API_URL}${url}`;
+      console.log(`Converted to absolute URL: ${link.href}`);
+    } else {
+      link.href = url;
+    }
+    
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="my-8 w-full">
+      <Typography variant="h4" className="!font-medium !mb-6" gutterBottom>
+        SMILES to Molecular Structure Visualizer
+      </Typography>
+
+      {/* Processing Mode Selection */}
+      <div className="mb-6">
+        <FormControl component="fieldset">
+          <FormLabel component="legend" className="!text-lg !font-medium">
+            Processing Mode
+          </FormLabel>
+          <RadioGroup
+            value={processingMode}
+            onChange={(e) => setProcessingMode(e.target.value)}
+          >
+            <FormControlLabel
+              value="batch"
+              control={<Radio />}
+              label="Batch Processing (from dataset)"
+            />
+            <FormControlLabel
+              value="individual"
+              control={<Radio />}
+              label="Individual SMILES"
+            />
+          </RadioGroup>
+        </FormControl>
+      </div>
+
+      {/* Configuration Panel */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-6 bg-gray-50 rounded-lg">
+        <Typography variant="h6" className="!font-medium col-span-full">
+          Generation Configuration
+        </Typography>
+        
+        <TextField
+          label="Image Size (pixels)"
+          type="number"
+          size="small"
+          value={imageSize}
+          onChange={(e) => setImageSize(parseInt(e.target.value))}
+          InputProps={{ inputProps: { step: 50, min: 100, max: 1000 } }}
+          helperText="Width and height of generated images"
+        />
+        
+        <FormControl component="fieldset">
+          <FormLabel component="legend">Image Format</FormLabel>
+          <RadioGroup
+            value={imageFormat}
+            onChange={(e) => setImageFormat(e.target.value)}
+            row
+          >
+            <FormControlLabel value="png" control={<Radio />} label="PNG" />
+            <FormControlLabel value="svg" control={<Radio />} label="SVG" />
+          </RadioGroup>
+        </FormControl>
+
+        {processingMode === "batch" && (
+          <>
+            <TextField
+              label="Maximum Images"
+              type="number"
+              size="small"
+              value={maxImages}
+              onChange={(e) => setMaxImages(parseInt(e.target.value))}
+              InputProps={{ inputProps: { step: 10, min: 1, max: 1000 } }}
+              helperText="Limit number of images generated"
+            />
+            
+            <MuiFormControlLabel
+              control={
+                <Switch
+                  checked={generatePDF}
+                  onChange={(e) => setGeneratePDF(e.target.checked)}
+                />
+              }
+              label="Generate Combined PDF"
+            />
+          </>
+        )}
+      </div>
+
+      {/* Batch Processing Configuration */}
+      {processingMode === "batch" && (
+        <div className="mb-6">
+          <p className="mb-2 font-medium">Select SMILES Column:</p>
+          <SingleDropDown
+            columnNames={availableColumns}
+            onValueChange={setSmilesColumn}
+            initValue={smilesColumn}
+          />
+        </div>
+      )}
+
+      {/* Individual SMILES Input */}
+      {processingMode === "individual" && (
+        <div className="mb-6">
+          <TextField
+            label="Enter SMILES String"
+            fullWidth
+            value={singleSMILES}
+            onChange={(e) => setSingleSMILES(e.target.value)}
+            placeholder="e.g., CCO (ethanol), C1=CC=CC=C1 (benzene)"
+            helperText="Enter a single SMILES string to visualize its molecular structure"
+          />
+        </div>
+      )}
+
+      {/* Generate Button */}
+      <div className="flex justify-end mb-6">
+        <Button
+          variant="contained"
+          size="large"
+          onClick={processingMode === "batch" ? handleBatchGeneration : handleSingleGeneration}
+          disabled={loading || (processingMode === "batch" && !smilesColumn) || (processingMode === "individual" && !singleSMILES.trim())}
+          className="!bg-primary-btn !text-white !font-medium !px-8 !py-3"
+        >
+          {loading ? "Generating..." : "Generate Structures"}
+        </Button>
+      </div>
+
+      {/* Progress Bar */}
+      {loading && (
+        <div className="mb-6">
+          <Progress
+            value={progress}
+            shadow
+            color="success"
+            status="secondary"
+            striped
+          />
+          {currentProcessing && (
+            <p className="text-center mt-2 text-gray-600">
+              {currentProcessing}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Preview Images */}
+      {previewImages.length > 0 && (
+        <div className="mb-8">
+          <Typography variant="h5" className="!font-medium !mb-4" gutterBottom>
+            Generated Molecular Structures Preview
+          </Typography>
+          <Grid container spacing={3}>
+            {previewImages.map((item, index) => (
+              <Grid item xs={12} sm={6} md={4} key={index}>
+                <Card className="h-full">
+                  <CardMedia
+                    component="img"
+                    height="200"
+                    image={item.image_base64 ? 
+                      `data:image/png;base64,${item.image_base64}` : 
+                      item.image_url ? 
+                        `${import.meta.env.VITE_APP_API_URL}${item.image_url}` : 
+                        ''
+                    }
+                    onError={(e) => {
+                      console.error("Image failed to load:", e.target.src);
+                      // Try alternative URL format if image fails to load
+                      if (item.image_url && e.target.src.includes(item.image_url)) {
+                        console.log("Trying alternative URL format");
+                        e.target.src = item.image_url.startsWith('http') ? 
+                          item.image_url : 
+                          `${window.location.origin}${item.image_url}`;
+                      }
+                    }}
+                    alt={`Molecule ${index + 1}`}
+                    className="object-contain bg-white"
+                  />
+                  <CardContent>
+                    <Typography variant="body2" className="!font-mono !text-xs break-all">
+                      {item.smiles}
+                    </Typography>
+                    <Typography variant="caption" color={item.valid ? "success.main" : "error.main"}>
+                      {item.valid ? "✅ Valid" : "❌ Invalid"}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </div>
+      )}
+
+      {/* Results Display */}
+      {results && (
+        <div className="mt-8">
+          <Typography variant="h4" className="!font-medium !mb-6" gutterBottom>
+            Generation Results
+          </Typography>
+
+          {/* Summary Statistics for Batch */}
+          {processingMode === "batch" && results.summary && (
+            <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <Typography variant="h6" className="!font-medium">
+                  Total SMILES
+                </Typography>
+                <Typography variant="h4" className="!text-blue-600">
+                  {results.summary.total_smiles || 0}
+                </Typography>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <Typography variant="h6" className="!font-medium">
+                  Valid Structures
+                </Typography>
+                <Typography variant="h4" className="!text-green-600">
+                  {results.summary.valid_structures || 0}
+                </Typography>
+              </div>
+              <div className="bg-red-50 p-4 rounded-lg">
+                <Typography variant="h6" className="!font-medium">
+                  Invalid SMILES
+                </Typography>
+                <Typography variant="h4" className="!text-red-600">
+                  {results.summary.invalid_smiles || 0}
+                </Typography>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <Typography variant="h6" className="!font-medium">
+                  Success Rate
+                </Typography>
+                <Typography variant="h4" className="!text-purple-600">
+                  {results.summary.success_rate || 0}%
+                </Typography>
+              </div>
+            </div>
+          )}
+
+          {/* Download Links */}
+          {results.download_links && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <Typography variant="h6" className="!font-medium !mb-3">
+                Download Generated Files
+              </Typography>
+              <div className="flex flex-wrap gap-3">
+                {results.download_links.images_zip && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleDownload(results.download_links.images_zip, "molecular_structures.zip")}
+                  >
+                    📁 Download All Images (ZIP)
+                  </Button>
+                )}
+                {results.download_links.pdf && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleDownload(results.download_links.pdf, "molecular_structures.pdf")}
+                  >
+                    📄 Download PDF
+                  </Button>
+                )}
+                {results.download_links.single_image && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleDownload(results.download_links.single_image, `molecule.${imageFormat}`)}
+                  >
+                    🖼️ Download Image
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Generation Log */}
+          {results.generation_log && results.generation_log.length > 0 && (
+            <div className="mb-8">
+              <Typography variant="h5" className="!font-medium !mb-4" gutterBottom>
+                Generation Log
+              </Typography>
+              <AgGridAutoDataComponent
+                rowData={results.generation_log}
+                download={true}
+                height="300px"
+                rowHeight={40}
+                headerHeight={50}
+                paginationPageSize={15}
+              />
+            </div>
+          )}
+
+          {/* Invalid SMILES */}
+          {results.invalid_smiles && results.invalid_smiles.length > 0 && (
+            <div className="mb-8">
+              <Typography variant="h5" className="!font-medium !mb-4" gutterBottom>
+                Invalid SMILES
+              </Typography>
+              <AgGridAutoDataComponent
+                rowData={results.invalid_smiles}
+                download={true}
+                height="200px"
+                rowHeight={40}
+                headerHeight={50}
+                paginationPageSize={10}
+              />
+            </div>
+          )}
+
+          {/* Processing Stats */}
+          {results.processing_stats && (
+            <div className="mb-8">
+              <Typography variant="h5" className="!font-medium !mb-4" gutterBottom>
+                Processing Statistics
+              </Typography>
+              <div className="bg-gray-100 p-4 rounded-lg">
+                <pre className="text-sm">{JSON.stringify(results.processing_stats, null, 2)}</pre>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Help Button */}
+      <button
+        className="fixed bottom-5 right-5 bg-primary-btn text-2xl font-black text-white rounded-full p-4 py-2 shadow-lg"
+        onClick={openModal}
+      >
+        ?
+      </button>
+
+      {/* Help Modal */}
+      <Modal
+        open={visible}
+        onClose={closeModal}
+        aria-labelledby="help-modal"
+        aria-describedby="help-modal-description"
+        width="800px"
+        scroll
+        closeButton
+      >
+        <div className="bg-white text-left rounded-lg shadow-lg px-6 overflow-auto">
+          <Docs section={"smilesStructure"} />
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+export default SMILESMolecularStructure;

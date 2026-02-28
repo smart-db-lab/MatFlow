@@ -1,0 +1,21 @@
+---
+description: Always suggest industry standards and better approaches before implementing
+alwaysApply: true
+---
+
+# Suggest Best Practices Before Implementing
+
+Before implementing any non-trivial feature, fix, or architectural decision:
+
+1. **Pause and advise first** — Briefly suggest the industry-standard or best-practice approach. Compare options if multiple exist (e.g., "Option A is simpler, Option B scales better").
+2. **Check for libraries** — Search the web or use your knowledge to see if a well-maintained library already solves the problem. Recommend it if it's worth the dependency; explain why not if it isn't.
+3. **Flag anti-patterns** — If the user's proposed approach has known pitfalls, explain them clearly before proceeding.
+4. **Keep it short** — A 3-5 sentence recommendation is enough. Don't write essays — the user wants guidance, not a lecture.
+5. **Then implement** — After the user confirms (or if the choice is obvious), proceed immediately.
+
+This applies to UI/UX patterns, data modeling, API design, state management, performance, security, and any architectural choice.
+
+# Code Quality & Consistency
+
+- **Write clean, industry-standard code** — Use clear naming, proper separation of concerns, and idiomatic patterns for the language/framework in use.
+- **Follow existing backend structure** — Before adding new backend code (models, serializers, views, URLs), read how existing ones are written and match the same patterns, naming conventions, file organization, and coding style exactly. Do not introduce a different style.

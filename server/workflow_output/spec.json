@@ -1,0 +1,45 @@
+{
+  "problem": "Diabetes Likelihood Prediction",
+  "domain": "Healthcare",
+  "intent": "Prediction",
+  "created_utc": "2023-02-20T14:30:00Z",
+  "targets": {
+    "target": [
+      {
+        "name": "diabetes_likelihood",
+        "type": "continuous"
+      }
+    ]
+  },
+  "constraints": {
+    "min_max_scaling": true,
+    "standardization": false
+  },
+  "data_sources": [
+    "Electronic Health Records (EHR)",
+    "Clinical Datasets (e.g., MIMIC-III)"
+  ],
+  "features": [
+    "Age",
+    "Sex",
+    "BMI",
+    "Systolic Blood Pressure",
+    "Diastolic Blood Pressure",
+    "Fasting Glucose",
+    "Hemoglobin A1c",
+    "Smoking Status"
+  ],
+  "workflow": [
+    "Data Preprocessing (handling missing values, encoding categorical variables)",
+    "Feature Engineering (extracting relevant features from EHRs and clinical datasets)"
+  ],
+  "validation": [
+    "Split dataset into training (~70%) and testing sets (~30%)",
+    "Use metrics such as Mean Absolute Error (MAE) and R-squared for evaluation"
+  ],
+  "decision_gates": [],
+  "artifacts": [
+    "Trained model artifacts (e.g., weights, biases)",
+    "Model performance metrics (e.g., MAE, R-squared)"
+  ]
+}
