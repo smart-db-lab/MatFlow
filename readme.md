@@ -16,8 +16,8 @@ A full-stack ML workflow platform — React frontend + Django REST backend.
 
 ## Setup
 #### Using Docker : 
-Open terminal & change directory to MLFlow 
-        ```  cd MLFlow ```
+Open terminal & change directory to Project Directory. Here it is  MatFlow 
+        ```  cd MatFlow ```
        
  Run this command 
         ``` docker compose up  --build  ``` 
