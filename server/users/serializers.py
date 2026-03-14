@@ -7,6 +7,7 @@ from django.utils.translation import gettext as _
 
 class UserSerializer(serializers.ModelSerializer):
     profile_image_url = serializers.SerializerMethodField()
+    profile_image = serializers.FileField(required=False, allow_null=True)
     
     class Meta:
         model = User
@@ -41,6 +42,13 @@ class UserSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_image.url)
             return obj.profile_image.url
         return None
+
+    def validate_profile_image(self, value):
+        # Allow broad image support (png/jpg/webp/svg/heic/etc.) while blocking non-image uploads.
+        content_type = (getattr(value, "content_type", "") or "").lower()
+        if content_type and not content_type.startswith("image/"):
+            raise serializers.ValidationError(_("Please upload an image file."))
+        return value
     
     def validate_email(self, value):
         # During updates, allow the same email for the current instance

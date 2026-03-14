@@ -8,11 +8,18 @@
 */
 
 import React, { useEffect, useState } from 'react';
-import Papa from 'papaparse';
+import * as Papa from 'papaparse';
 import JSZip from 'jszip';
-import { Modal } from '@nextui-org/react';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
 import Docs from '../../../../Docs/Docs';
 import { apiService } from '../../../../services/api/apiService';
+import {
+  FE_ACTION_ROW_CLASS,
+  FE_CARD_CLASS,
+  FE_LABEL_CLASS,
+  FE_SECTION_TITLE_CLASS,
+} from '../../Feature Engineering/feUi';
 
 export default function ScalerEvaluationPage({ csvData }) {
   // dataset
@@ -170,21 +177,21 @@ export default function ScalerEvaluationPage({ csvData }) {
     );
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-4">
+    <div className="w-full pt-1 pb-3">
       {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold text-gray-900">
+      <div className="mb-3 px-4">
+        <h1 className={FE_SECTION_TITLE_CLASS}>
           Scaler Evaluation
         </h1>
-        <p className="mt-1 text-xs md:text-sm text-gray-600">
+        <p className="mt-1 text-sm text-gray-600">
           Compare scaling methods using RF, DT, XGBoost, and CatBoost models
           with weighted ranking.
         </p>
       </div>
       {/* Configuration Panel */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-5">
+      <div className={`${FE_CARD_CLASS} mb-3`}>
         {' '}
-        <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
+        <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
           <svg
             className="w-6 h-6 mr-2 text-gray-600"
             fill="none"
@@ -209,13 +216,13 @@ export default function ScalerEvaluationPage({ csvData }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Target Selection */}
           <div className="space-y-2">
-            <label className="block text-xs md:text-sm font-semibold text-gray-900">
+            <label className={FE_LABEL_CLASS}>
               Target Column
             </label>{' '}
             <select
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 border border-gray-300 rounded-[10px] bg-[#fcfcfd] focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 focus:border-[#0D9488] transition-colors"
             >
               <option value="">Select target column...</option>
               {cols.map((c) => (
@@ -228,7 +235,7 @@ export default function ScalerEvaluationPage({ csvData }) {
 
           {/* Features Selection */}
           <div className="space-y-2">
-            <label className="block text-xs md:text-sm font-semibold text-gray-900">
+            <label className={FE_LABEL_CLASS}>
               Feature Columns
             </label>
             <select
@@ -238,7 +245,7 @@ export default function ScalerEvaluationPage({ csvData }) {
               onChange={(e) =>
                 setFeats([...e.target.selectedOptions].map((o) => o.value))
               }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 border border-gray-300 rounded-[10px] bg-[#fcfcfd] focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 focus:border-[#0D9488] transition-colors"
             >
               {cols
                 .filter((c) => c !== target)
@@ -254,7 +261,7 @@ export default function ScalerEvaluationPage({ csvData }) {
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           {' '}
           <div className="space-y-2">
-            <label className="block text-xs md:text-sm font-semibold text-gray-900">
+            <label className={FE_LABEL_CLASS}>
               Test Size:{' '}
               <span className="font-semibold text-gray-600">{test}</span>
             </label>
@@ -273,26 +280,27 @@ export default function ScalerEvaluationPage({ csvData }) {
             </div>
           </div>
           <div className="space-y-2">
-            <label className="block text-xs md:text-sm font-semibold text-gray-900">
+            <label className={FE_LABEL_CLASS}>
               Random State
             </label>{' '}
             <input
               type="number"
               value={rand}
               onChange={(e) => setRand(+e.target.value || 0)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 border border-gray-300 rounded-[10px] bg-[#fcfcfd] focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 focus:border-[#0D9488] transition-colors"
               placeholder="Enter random seed..."
             />
           </div>
         </div>
         {/* Run Button */}
-        <div className="mt-6 flex justify-center">
+        <div className={FE_ACTION_ROW_CLASS}>
+          <div />
           <button
             onClick={run}
             disabled={busy || !target}
             className={`px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
               busy || !target
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                ? 'bg-[#99d5cf] text-white cursor-not-allowed'
                 : 'bg-[#0D9488] hover:bg-[#0F766E] text-white shadow-sm'
             }`}
           >
@@ -366,8 +374,8 @@ export default function ScalerEvaluationPage({ csvData }) {
       {res && (
         <div className="space-y-4 md:space-y-6">
           {/* Best Scaler Metrics */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
+          <div className={FE_CARD_CLASS}>
+            <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
               <svg
                 className="w-6 h-6 mr-2 text-green-600"
                 fill="none"
@@ -422,8 +430,8 @@ export default function ScalerEvaluationPage({ csvData }) {
             </div>
           </div>{' '}
           {/* Ranking Table */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
+          <div className={FE_CARD_CLASS}>
+            <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
               <svg
                 className="w-6 h-6 mr-2 text-gray-600"
                 fill="none"
@@ -496,9 +504,9 @@ export default function ScalerEvaluationPage({ csvData }) {
           </div>{' '}
           {/* Dashboard Plot */}
           {res.plots?.overview_png && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-5">
+            <div className={FE_CARD_CLASS}>
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-sm font-semibold text-gray-900 flex items-center">
+                <h3 className="text-base font-semibold text-gray-900 flex items-center">
                   <svg
                     className="w-6 h-6 mr-2 text-gray-600"
                     fill="none"
@@ -617,8 +625,8 @@ export default function ScalerEvaluationPage({ csvData }) {
           )}
           {/* Scaled Preview */}
           {res.scaled_preview && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
+            <div className={FE_CARD_CLASS}>
+              <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
                 <svg
                   className="w-6 h-6 mr-2 text-gray-600"
                   fill="none"
@@ -677,8 +685,8 @@ export default function ScalerEvaluationPage({ csvData }) {
             </div>
           )}{' '}
           {/* Downloads */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
+          <div className={FE_CARD_CLASS}>
+            <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
               <svg
                 className="w-6 h-6 mr-2 text-gray-600"
                 fill="none"
@@ -755,19 +763,16 @@ export default function ScalerEvaluationPage({ csvData }) {
       </button>
       
       {/* Documentation Modal */}
-      <Modal
+      <Dialog
         open={visible}
         onClose={closeModal}
-        aria-labelledby="help-modal"
-        aria-describedby="help-modal-description"
-        width="800px"
-        scroll
-        closeButton
+        fullWidth
+        maxWidth="md"
       >
-        <div className="bg-white text-left rounded-lg shadow-lg px-6 overflow-auto">
+        <DialogContent className="bg-white text-left rounded-lg shadow-lg px-6 overflow-auto">
           <Docs section={'bestScaler'} />
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

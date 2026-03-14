@@ -66,7 +66,7 @@ function ModelDeploymentNode({ id, data }) {
         )}
         <div className="grid place-items-center gap-1 p-2 py-3 min-w-[80px]">
           <RxRocket size={"25"} />
-          <span>Model Deployment</span>
+          <span>Materials Property Prediction</span>
         </div>
       </div>
       {data && data.table && (

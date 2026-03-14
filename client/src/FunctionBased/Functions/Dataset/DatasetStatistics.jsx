@@ -73,10 +73,10 @@ function DatasetStatistics({ csvData }) {
 
   return (
     <div>
-      <div className="my-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Dataset Statistics</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Numeric columns analyzed: <span className="font-semibold text-gray-700">{columnStats.length}</span>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-gray-900">Materials Property Summary</h2>
+        <p className="rounded-md border border-[#D9ECE9] bg-[#F0FDFA] px-3 py-1.5 text-base font-semibold text-[#0F766E]">
+          {columnStats.length} numeric columns
         </p>
       </div>
       <div className="w-full">

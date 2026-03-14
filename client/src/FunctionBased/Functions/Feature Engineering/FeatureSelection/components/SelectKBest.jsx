@@ -1,12 +1,14 @@
 import styled from "@emotion/styled";
 import { Slider, Stack } from "@mui/material";
-import { Checkbox } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import Plot from "react-plotly.js";
 import { useSelector } from "react-redux";
 import NextTable from "../../../../Components/NextTable/NextTable";
-import SingleDropDown from "../../../../Components/SingleDropDown/SingleDropDown";
 import { apiService } from "../../../../../services/api/apiService";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Autocomplete from "@mui/material/Autocomplete";
+import TextField from "@mui/material/TextField";
 
 function SelectKBest({ csvData }) {
   const allNumberColumn = Object.keys(csvData[0]);
@@ -68,24 +70,29 @@ function SelectKBest({ csvData }) {
         </div>
         <div>
           <div>
-            <p>Select Score Function:</p>
-            <SingleDropDown
-              columnNames={
+            <p className="text-sm font-semibold text-gray-800 mb-1.5">Select Score Function</p>
+            <Autocomplete
+              size="small"
+              options={
                 d_type === "number"
                   ? ["f_regression", "mutual_info_regression"]
                   : ["f_classif", "mutual_info_classif"]
               }
-              initValue={score_func}
-              onValueChange={setScoreFunction}
+              value={score_func || null}
+              onChange={(_, val) => setScoreFunction(val || score_func)}
+              renderInput={(params) => <TextField {...params} placeholder="Select score function" />}
             />
           </div>
-          <Checkbox
-            key={`show-graph-${show_graph}`}
-            label="Show Graph"
+          <FormControlLabel
             className="mt-4"
-            color="primary"
-            defaultSelected={show_graph}
-            onChange={(e) => setShowGraph(e.valueOf())}
+            control={
+              <Checkbox
+                size="small"
+                checked={show_graph}
+                onChange={(e) => setShowGraph(e.target.checked)}
+              />
+            }
+            label={<span className="text-sm font-medium">Show Graph</span>}
           />
         </div>
       </div>

@@ -8,6 +8,7 @@ from ...modules.classes import encoder
 
 def encoding(file):
     data=file.get("file")
+    print(file)
     data=pd.DataFrame(data)
     var = file.get("select_column")
     method = file.get("method")
@@ -33,7 +34,7 @@ def ordinal_encoding(data, var, add_pipeline,file):
     # encoding value start from 0 or 1
     enc_val = range(len(unique_val)) if from_zero else range(1, len(unique_val) + 1)
 
-    order = file.get("set_value_order")
+    order = file.get("set_value_order") or list(unique_val)
 
     ordinal_enc_dict = {val: new_val for val, new_val in zip(order, enc_val)}
     if len(ordinal_enc_dict) == len(unique_val):
@@ -42,8 +43,10 @@ def ordinal_encoding(data, var, add_pipeline,file):
         new_value = new_value.to_dict(orient="records")
         return JsonResponse(new_value, safe=False)
     else:
-        #return error
-        return JsonResponse("")
+        return JsonResponse(
+            {"error": f"Order list length ({len(ordinal_enc_dict)}) does not match unique values ({len(unique_val)})"},
+            status=400,
+        )
 
 
 

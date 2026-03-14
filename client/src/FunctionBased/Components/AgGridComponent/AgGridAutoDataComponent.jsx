@@ -1,22 +1,36 @@
 import { AgGridReact } from "ag-grid-react";
 import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { ChevronDown, Columns3, Download, Maximize2, Table2 } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { matflowApi } from "../../../services/api/matflowApi";
+import { getWorkspaceRootFromPath } from "../../../util/utils";
 
 function AgGridAutoDataComponent({
   rowData,
-  rowHeight = 50,
+  rowHeight = 34,
   paginationPageSize = 10,
-  headerHeight = 50,
+  enablePagination = true,
+  paginationThreshold = 20,
+  autoPageSize = true,
+  headerHeight = 36,
   download = false,
   height = "600px",
   customColumnOrder = null,
   downloadOptions = null,
   themeVariant = "default",
   flatContainer = false,
+  projectId: projectIdProp = null,
 }) {
+  const { projectId: routeProjectId } = useParams();
+  const activeProjectId = projectIdProp || routeProjectId;
+  const activeFolder = useSelector((state) => state.uploadedFile.activeFolder);
+  const activeFile = useSelector((state) => state.uploadedFile.activeFile);
   const gridRef = useRef();
   const safeRowData = Array.isArray(rowData) ? rowData : [];
   const isDatasetTheme = themeVariant === "dataset";
+  const totalRows = safeRowData.length;
+  const shouldPaginate = enablePagination && totalRows > paginationThreshold;
 
   const columnDefs = useMemo(() => {
     if (safeRowData.length === 0 || !safeRowData[0]) return [];
@@ -121,49 +135,97 @@ function AgGridAutoDataComponent({
     }
   }, [customColumnOrder, reorderColumns]);
 
-  const handleDownload = useCallback((downloadType) => {
+  const buildCsvContent = useCallback((rows, columns) => {
+    const header = columns.join(",");
+    const lines = rows.map((row) =>
+      columns
+        .map((col) => {
+          const value = row?.[col];
+          const normalized = value === null || value === undefined ? "" : String(value);
+          return `"${normalized.replace(/"/g, '""')}"`;
+        })
+        .join(","),
+    );
+    return [header, ...lines].join("\n");
+  }, []);
+
+  const triggerCsvDownload = useCallback((csvContent, filename) => {
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleDownload = useCallback(async (downloadType) => {
     if (safeRowData.length === 0) return;
-    
-    if (downloadType === 'full') {
-      // Download all data
-      gridRef.current.api.exportDataAsCsv();
-    } else if (downloadType === 'minimal' && downloadOptions && downloadOptions.minimalColumns) {
-      // Download only specified columns
-      const minimalData = safeRowData.map(row => {
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const defaultColumns =
+      columnDefs.length > 0
+        ? columnDefs.map((c) => c.field).filter(Boolean)
+        : Object.keys(safeRowData[0] || {});
+
+    let exportRows = safeRowData;
+    let exportColumns = defaultColumns;
+    let filename = `results_full_${timestamp}.csv`;
+
+    if (
+      downloadType === "minimal" &&
+      downloadOptions &&
+      Array.isArray(downloadOptions.minimalColumns)
+    ) {
+      exportColumns = downloadOptions.minimalColumns;
+      exportRows = safeRowData.map((row) => {
         const minimalRow = {};
-        downloadOptions.minimalColumns.forEach(col => {
+        exportColumns.forEach((col) => {
           if (row[col] !== undefined) {
             minimalRow[col] = row[col];
           }
         });
         return minimalRow;
       });
-      
-      // Create CSV content
-      const headers = downloadOptions.minimalColumns.join(',');
-      const csvContent = [
-        headers,
-        ...minimalData.map(row => 
-          downloadOptions.minimalColumns.map(col => 
-            row[col] !== undefined ? `"${row[col]}"` : '""'
-          ).join(',')
-        )
-      ].join('\n');
-      
-      // Download the CSV
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', 'results_minimal.csv');
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      filename = `results_minimal_${timestamp}.csv`;
     }
-    
+
+    const csvContent = buildCsvContent(exportRows, exportColumns);
+    triggerCsvDownload(csvContent, filename);
+
+    if (activeProjectId) {
+      try {
+        const workspaceRoot =
+          getWorkspaceRootFromPath(activeFolder) ||
+          getWorkspaceRootFromPath(activeFile?.name || "");
+        if (!workspaceRoot) {
+          throw new Error("Workspace context missing for CSV persistence.");
+        }
+        await matflowApi.dataset.createFile(
+          activeProjectId,
+          exportRows,
+          filename,
+          `${workspaceRoot}/output/generated_datasets`,
+        );
+      } catch (error) {
+        console.warn("Failed to persist CSV in workspace output folder:", error);
+      }
+    }
+
     setShowDownloadDropdown(false);
-  }, [safeRowData, downloadOptions]);
+  }, [
+    safeRowData,
+    downloadOptions,
+    columnDefs,
+    buildCsvContent,
+    triggerCsvDownload,
+    activeProjectId,
+    activeFolder,
+    activeFile,
+  ]);
 
   return (
     <>
@@ -182,12 +244,14 @@ function AgGridAutoDataComponent({
           rowData={safeRowData}
           columnDefs={columnDefs}
           rowHeight={rowHeight}
-          // pagination
-          // paginationPageSize={paginationPageSize}
+          pagination={shouldPaginate}
+          paginationPageSize={paginationPageSize}
+          paginationAutoPageSize={shouldPaginate && autoPageSize}
           rowModelType="clientSide"
           suppressRowVirtualisation={false}
           rowBuffer={20}
           domLayout="normal"
+          alwaysShowVerticalScroll={false}
           defaultColDef={defaultColDef}
           headerHeight={headerHeight}
           onGridReady={onGridReady}

@@ -11,7 +11,7 @@ class Project(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        related_name="projects",
+        related_name="pfs_projects",
         on_delete=models.CASCADE,
     )
     name = models.CharField(max_length=200)

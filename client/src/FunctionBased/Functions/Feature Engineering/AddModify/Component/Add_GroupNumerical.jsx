@@ -1,8 +1,13 @@
-import { Checkbox, Input } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { setData } from "../../../../../Slices/FeatureEngineeringSlice";
-import SingleDropDown from "../../../../Components/SingleDropDown/SingleDropDown";
+import TextField from "@mui/material/TextField";
+import Autocomplete from "@mui/material/Autocomplete";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import FormControl from "@mui/material/FormControl";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 
 function Add_GroupNumerical({
   csvData,
@@ -81,11 +86,11 @@ function Add_GroupNumerical({
       <div className={`flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6 mb-4 ${type === "node" && "flex-col"}`}>
         <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full flex-1`}>
           <div className="w-full sm:w-auto sm:min-w-[120px]">
-            <Input
-              label="N Groups"
+            <TextField
+              label="Group Count"
               value={nGroups}
               onChange={(e) => {
-                const val = e.target.value;
+                const val = Number(e.target.value || 0);
                 setNGroups(val);
                 if (val < nGroupData.length)
                   setNGroupData(nGroupData.slice(0, val));
@@ -105,26 +110,32 @@ function Add_GroupNumerical({
                 }
               }}
               type="number"
+              size="small"
+              inputProps={{ step: 1, min: 1 }}
             />
           </div>
           <div className="flex-grow w-full sm:w-auto">
-            <p className="text-sm font-medium text-gray-700 mb-1.5">Bin Column</p>
-            <SingleDropDown
-              columnNames={columnNames}
-              onValueChange={setBin_column}
-              initValue={bin_column}
+            <p className="text-sm font-semibold text-gray-800 mb-1.5">Bin Column</p>
+            <Autocomplete
+              size="small"
+              options={columnNames}
+              value={bin_column || null}
+              onChange={(_, val) => setBin_column(val || "")}
+              renderInput={(params) => <TextField {...params} placeholder="Select numeric column" />}
             />
           </div>
         </div>
         <div className="flex-shrink-0">
-          <Checkbox
-            key={`show-bin-dict-${show_bin_dict}`}
-            defaultSelected={show_bin_dict}
-            color="primary"
-            onChange={(e) => setShow_bin_dict(e.valueOf())}
-          >
-            Show Bin Dict
-          </Checkbox>
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={show_bin_dict}
+                onChange={(e) => setShow_bin_dict(e.target.checked)}
+              />
+            }
+            label={<span className="text-sm font-medium">Show Bin Dictionary</span>}
+          />
         </div>
       </div>
       <div className="mt-4">
@@ -140,29 +151,29 @@ function Add_GroupNumerical({
                 {val.use_operator ? (
                   <>
                     <div className="w-full flex flex-col">
-                      <label htmlFor="" className="mb-2 text-sm">
+                      <label htmlFor="" className="mb-2 text-sm font-semibold text-gray-800">
                         Operator
                       </label>
-                      <select
-                        name=""
-                        id=""
-                        className="p-2 rounded-lg"
+                      <FormControl size="small">
+                        <Select
                         value={val.operator}
                         onChange={(e) =>
                           handleValueChange(e.target.value, index, "operator")
                         }
                       >
-                        <option value="==">==</option>
-                        <option value="!=">!=</option>
-                        <option value="<">{"<"}</option>
-                        <option value=">">{">"}</option>
-                        <option value="<=">{"<="}</option>
-                        <option value=">=">{">="}</option>
-                      </select>
+                        <MenuItem value="==">==</MenuItem>
+                        <MenuItem value="!=">!=</MenuItem>
+                        <MenuItem value="<">{"<"}</MenuItem>
+                        <MenuItem value=">">{">"}</MenuItem>
+                        <MenuItem value="<=">{"<="}</MenuItem>
+                        <MenuItem value=">=">{">="}</MenuItem>
+                        </Select>
+                      </FormControl>
                     </div>
-                    <Input
+                    <TextField
                       label="Value"
                       type="number"
+                      size="small"
                       value={val.value}
                       fullWidth
                       onChange={(e) =>
@@ -172,18 +183,20 @@ function Add_GroupNumerical({
                   </>
                 ) : (
                   <>
-                    <Input
+                    <TextField
                       label="Min Value"
                       type="number"
+                      size="small"
                       fullWidth
                       value={val.min_value}
                       onChange={(e) =>
                         handleValueChange(e.target.value, index, "min_value")
                       }
                     />
-                    <Input
+                    <TextField
                       label="Max Value"
                       type="number"
+                      size="small"
                       fullWidth
                       value={val.max_value}
                       onChange={(e) =>
@@ -192,9 +205,10 @@ function Add_GroupNumerical({
                     />
                   </>
                 )}
-                <Input
+                <TextField
                   label="Bin Value"
                   type="number"
+                  size="small"
                   fullWidth
                   value={val.bin_value}
                   onChange={(e) =>
@@ -203,17 +217,18 @@ function Add_GroupNumerical({
                 />
               </div>
               <div className="flex-shrink-0">
-                <Checkbox
-                  key={`use-operator-${index}-${val.use_operator}`}
-                  size={type === "node" ? "sm" : "md"}
-                  color="primary"
-                  defaultSelected={val.use_operator}
-                  onChange={(e) =>
-                    handleValueChange(e.valueOf(), index, "use_operator")
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={Boolean(val.use_operator)}
+                      onChange={(e) =>
+                        handleValueChange(e.target.checked, index, "use_operator")
+                      }
+                    />
                   }
-                >
-                  Use Operator
-                </Checkbox>
+                  label={<span className="text-sm font-medium">Use Operator</span>}
+                />
               </div>
             </div>
           );

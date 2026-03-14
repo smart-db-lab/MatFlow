@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { User, LayoutDashboard, LogOut, Blocks, BookOpen, Database } from "lucide-react";
-import { isLoggedIn, isAuthenticated, isAdminLoggedIn, checkAdminStatus, logout, AUTH_STATE_CHANGED_EVENT } from "../../../util/adminAuth";
+import { isLoggedIn, isAuthenticated, isAdminLoggedIn, getCurrentUserCached, logout, AUTH_STATE_CHANGED_EVENT } from "../../../util/adminAuth";
 import { isGuestMode, endGuestSession } from "../../../util/guestSession";
-import { serviceAdminApi, commonApi } from "../../../services/api/apiService";
+import { serviceAdminApi } from "../../../services/api/apiService";
 import { accountMenuStyles, getRoleBadgeClass } from "../Common/accountMenuStyles";
 
 function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const isMatflowPage = location.pathname === '/matflow';
-  const isProjectsPage = location.pathname === '/projects' || location.pathname.startsWith('/dashboard');
+  const isProjectsPage =
+    location.pathname === '/projects' ||
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname.startsWith('/matflow/dashboard');
+  const settingsOrigin = isProjectsPage ? "dashboard" : "landing";
   const isDashboardPage = location.pathname === '/admin-dashboard';
   const isMatflowContext = isMatflowPage || isProjectsPage || location.state?.fromMatflow || false;
   const [isLoggedInState, setIsLoggedInState] = useState(false);
@@ -19,8 +23,14 @@ function Navbar() {
   const [isVisible, setIsVisible] = useState(true);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [userData, setUserData] = useState(null);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const profileDropdownRef = useRef(null);
   const isUserAuthenticated = isAuthenticated();
+  const withAvatarCacheBust = (user) => {
+    if (!user?.profile_image_url) return user;
+    const separator = user.profile_image_url.includes("?") ? "&" : "?";
+    return { ...user, profile_image_url: `${user.profile_image_url}${separator}t=${Date.now()}` };
+  };
 
   const fetchHeaderSection = async (serviceKey) => {
     try {
@@ -45,13 +55,11 @@ function Navbar() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
     window.addEventListener('headerSectionUpdated', handleHeaderUpdate);
-    const interval = setInterval(load, 10000);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('headerSectionUpdated', handleHeaderUpdate);
-      clearInterval(interval);
     };
   }, [isMatflowContext]);
 
@@ -62,7 +70,8 @@ function Navbar() {
 
       if (isAuthenticated()) {
         try {
-          const adminStatus = await checkAdminStatus();
+          const user = await getCurrentUserCached();
+          const adminStatus = Boolean(user?.is_superuser || user?.is_staff);
           setIsAdmin(adminStatus || isAdminLoggedIn());
         } catch {
           setIsAdmin(isAdminLoggedIn());
@@ -74,37 +83,38 @@ function Navbar() {
     checkAuth();
 
     window.addEventListener(AUTH_STATE_CHANGED_EVENT, checkAuth);
-    const interval = setInterval(checkAuth, 5000);
     return () => {
       window.removeEventListener(AUTH_STATE_CHANGED_EVENT, checkAuth);
-      clearInterval(interval);
     };
   }, []);
 
   useEffect(() => {
-    const fetchUserData = async () => {
+    setAvatarLoadFailed(false);
+  }, [userData?.profile_image_url]);
+
+  useEffect(() => {
+    const fetchUserData = async (force = false) => {
       if (!isAuthenticated()) {
         setUserData(null);
         return;
       }
       try {
-        const data = await commonApi.auth.getCurrentUser();
-        const user = data?.user || data;
-        setUserData(user || null);
+        const user = await getCurrentUserCached({ force });
+        setUserData(withAvatarCacheBust(user || null));
       } catch {
         setUserData(null);
       }
     };
 
     fetchUserData();
-    window.addEventListener("profileUpdated", fetchUserData);
-    window.addEventListener(AUTH_STATE_CHANGED_EVENT, fetchUserData);
-    const interval = setInterval(fetchUserData, 10000);
+    const handleProfileUpdated = () => fetchUserData(true);
+    const handleAuthChanged = () => fetchUserData(true);
+    window.addEventListener("profileUpdated", handleProfileUpdated);
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthChanged);
 
     return () => {
-      window.removeEventListener("profileUpdated", fetchUserData);
-      window.removeEventListener(AUTH_STATE_CHANGED_EVENT, fetchUserData);
-      clearInterval(interval);
+      window.removeEventListener("profileUpdated", handleProfileUpdated);
+      window.removeEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthChanged);
     };
   }, []);
 
@@ -294,10 +304,11 @@ function Navbar() {
                 <span className="hidden md:inline-block max-w-[140px] truncate text-sm font-medium text-gray-700 hover:text-primary transition-colors">
                   {getDisplayName()}
                 </span>
-                {userData?.profile_image_url ? (
+                {userData?.profile_image_url && !avatarLoadFailed ? (
                   <img
                     src={userData.profile_image_url}
                     alt="Profile"
+                    onError={() => setAvatarLoadFailed(true)}
                     className="w-8 h-8 rounded-full object-cover border-2 border-gray-200 hover:border-primary/40 transition-colors"
                   />
                 ) : (
@@ -332,6 +343,7 @@ function Navbar() {
                   {isAdmin && isMatflowContext ? (
                     <Link
                       to="/matflow-admin"
+                      state={{ fromSettingsOrigin: settingsOrigin }}
                       onClick={() => setShowProfileDropdown(false)}
                       className={accountMenuStyles.item}
                     >
@@ -353,7 +365,7 @@ function Navbar() {
                     </Link>
                   ) : isMatflowContext ? (
                     <Link
-                      to="/dashboard"
+                      to="/matflow/dashboard"
                       onClick={() => setShowProfileDropdown(false)}
                       className={accountMenuStyles.item}
                     >

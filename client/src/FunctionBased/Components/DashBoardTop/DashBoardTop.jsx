@@ -3,10 +3,9 @@ import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { User, LayoutDashboard, LogOut, Menu as MenuIcon, Shield } from "lucide-react";
-import { logout, isAdminLoggedIn, isAuthenticated } from "../../../util/adminAuth";
+import { logout, isAdminLoggedIn, isAuthenticated, AUTH_STATE_CHANGED_EVENT, getCurrentUserCached } from "../../../util/adminAuth";
 import { isGuestMode, endGuestSession } from "../../../util/guestSession";
 import { setShowLeftSideBar, setShowProfile } from "../../../Slices/SideBarSlice";
-import { commonApi } from "../../../services/api/apiService";
 import { serviceAdminApi } from "../../../services/api/apiService";
 import { accountMenuStyles, getRoleBadgeClass } from "../Common/accountMenuStyles";
 
@@ -16,12 +15,19 @@ function DashBoardTop() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showTitleConfirm, setShowTitleConfirm] = useState(false);
   const [userData, setUserData] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [headerSection, setHeaderSection] = useState(null);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const dropdownRef = useRef(null);
 
   const guest = isGuestMode();
+  const withAvatarCacheBust = (user) => {
+    if (!user?.profile_image_url) return user;
+    const separator = user.profile_image_url.includes("?") ? "&" : "?";
+    return { ...user, profile_image_url: `${user.profile_image_url}${separator}t=${Date.now()}` };
+  };
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -68,18 +74,20 @@ function DashBoardTop() {
   };
 
   useEffect(() => {
-    if (guest) {
-      setUserData({ email: "Guest" });
-      setIsAdmin(false);
-      return;
-    }
-
-    const fetchUserData = async () => {
-      if (!isAuthenticated()) return;
+    const fetchUserData = async (force = false) => {
+      if (isGuestMode()) {
+        setUserData({ email: "Guest" });
+        setIsAdmin(false);
+        return;
+      }
+      if (!isAuthenticated()) {
+        setUserData(null);
+        setIsAdmin(false);
+        return;
+      }
       try {
-        const data = await commonApi.auth.getCurrentUser();
-        const user = data?.user || data;
-        setUserData(user || null);
+        const user = await getCurrentUserCached({ force });
+        setUserData(withAvatarCacheBust(user || null));
         const adminStatus = (user && (user.is_superuser || user.is_staff)) || isAdminLoggedIn();
         setIsAdmin(adminStatus);
       } catch (error) {
@@ -90,15 +98,20 @@ function DashBoardTop() {
 
     fetchUserData();
 
-    const handleProfileUpdate = () => fetchUserData();
+    const handleProfileUpdate = () => fetchUserData(true);
+    const handleAuthStateChanged = () => fetchUserData(true);
     window.addEventListener("profileUpdated", handleProfileUpdate);
-    const interval = setInterval(fetchUserData, 10000);
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthStateChanged);
 
     return () => {
       window.removeEventListener("profileUpdated", handleProfileUpdate);
-      clearInterval(interval);
+      window.removeEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthStateChanged);
     };
   }, [guest]);
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [userData?.profile_image_url]);
 
   const getInitials = () => {
     if (userData?.full_name) {
@@ -115,6 +128,15 @@ function DashBoardTop() {
     ? headerSection.title_image.startsWith("http") ? headerSection.title_image : `${baseUrl}${headerSection.title_image}`
     : null;
   const brandName = headerSection?.title || "MATFLOW";
+  const pageTitle = headerSection?.title?.trim() || "Matflow";
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = pageTitle;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [pageTitle]);
 
   return (
     <nav className="relative w-full z-50 bg-white border-b border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -128,8 +150,9 @@ function DashBoardTop() {
           >
             <MenuIcon size={20} strokeWidth={2} />
           </button>
-          <Link
-            to="/matflow"
+          <button
+            type="button"
+            onClick={() => setShowTitleConfirm(true)}
             className="flex items-center hover:opacity-80 transition-opacity duration-200"
           >
             {titleImageUrl ? (
@@ -153,7 +176,7 @@ function DashBoardTop() {
                 {brandName}
               </span>
             )}
-          </Link>
+          </button>
 
         </div>
 
@@ -176,10 +199,11 @@ function DashBoardTop() {
               className="flex items-center focus:outline-none"
               title="Account"
             >
-              {userData?.profile_image_url ? (
+              {userData?.profile_image_url && !avatarLoadFailed ? (
                 <img
                   src={userData.profile_image_url}
                   alt="Profile"
+                  onError={() => setAvatarLoadFailed(true)}
                   className="w-8 h-8 rounded-full object-cover border-2 border-gray-200 hover:border-primary/40 transition-colors"
                 />
               ) : (
@@ -231,7 +255,10 @@ function DashBoardTop() {
 
                 {isAdmin && (
                   <button
-                    onClick={() => { setShowDropdown(false); navigate("/matflow-admin"); }}
+                    onClick={() => {
+                      setShowDropdown(false);
+                      navigate("/matflow-admin", { state: { fromSettingsOrigin: "dashboard" } });
+                    }}
                     className={`${accountMenuStyles.item} w-full`}
                   >
                     <span className={accountMenuStyles.iconWrap}>
@@ -271,6 +298,44 @@ function DashBoardTop() {
           </div>
         </div>
       </div>
+      {showTitleConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowTitleConfirm(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-md rounded-xl border border-gray-200 bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-gray-900">Leave dashboard?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              You are about to return to the Matflow landing page.
+            </p>
+            <p className="mt-2 text-sm font-medium text-red-600">
+              Warning: continuing will clear your current dashboard progress.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTitleConfirm(false)}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTitleConfirm(false);
+                  navigate("/matflow");
+                }}
+                className="rounded-md bg-[#0D9488] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0F766E]"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

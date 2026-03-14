@@ -1,8 +1,8 @@
-import { Textarea } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setData } from "../../../../../Slices/FeatureEngineeringSlice";
-import SingleDropDown from "../../../../Components/SingleDropDown/SingleDropDown";
+import TextField from "@mui/material/TextField";
+import Autocomplete from "@mui/material/Autocomplete";
 
 function Add_ExtractText({
   csvData,
@@ -40,23 +40,34 @@ function Add_ExtractText({
   return (
     <div className={`flex flex-col lg:flex-row gap-4 lg:gap-6 mb-4 ${type === "node" && "flex-col"}`}>
       <div className="flex-1">
-        <Textarea
+        <TextField
           label="Regex Pattern"
-          helperText="Example: ([A-Za-z]+)\."
           fullWidth
+          multiline
+          minRows={6}
           value={regex}
           onChange={(e) => {
             setRegex(e.target.value);
           }}
-          minRows={6}
+          placeholder="Example: ([A-Za-z]+)\\."
+          size="small"
+          helperText="Example: ([A-Za-z]+)\\."
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              borderRadius: "10px",
+              "&.Mui-focused fieldset": { borderColor: "#0D9488" },
+            },
+          }}
         />
       </div>
       <div className="w-full lg:w-auto lg:min-w-[200px] lg:max-w-[300px]">
-        <p className="text-sm font-medium text-gray-700 mb-1.5">Extract From</p>
-        <SingleDropDown
-          columnNames={stringColumns}
-          onValueChange={setExtract_from}
-          initValue={extract_from}
+        <p className="text-sm font-semibold text-gray-800 mb-1.5">Extract From</p>
+        <Autocomplete
+          size="small"
+          options={stringColumns}
+          value={extract_from || null}
+          onChange={(_, val) => setExtract_from(val || "")}
+          renderInput={(params) => <TextField {...params} placeholder="Select column" />}
         />
       </div>
     </div>

@@ -20,6 +20,79 @@ from rest_framework.renderers import JSONRenderer
 from django.db import transaction
 from users.emails import email_token_generator
 from django.utils.translation import gettext as _
+from rest_framework.decorators import api_view, permission_classes
+import random
+import string
+
+
+# ========== Simple signup with verification code ==========
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def signup(request):
+    """Simple signup with 6-digit verification code (printed to console)"""
+    username = request.data.get('username')
+    email = request.data.get('email')
+    password = request.data.get('password')
+
+    if not email or not password:
+        return Response({'error': 'Email and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if User.objects.filter(email=email).exists():
+        return Response({'error': 'A user with this email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Create user with custom model fields
+    user = User(
+        email=email,
+        username=username or '',
+        full_name=username or '',
+        is_active=True,
+        is_email_verified=False,
+    )
+    user.set_password(password)
+
+    # Generate a 6-digit verification code and store it
+    code = ''.join(random.choices(string.digits, k=6))
+    user.verification_token = code
+    user.save()
+
+    # Print the verification code to the server terminal
+    print("\n" + "=" * 50)
+    print(f"  VERIFICATION CODE for {email}")
+    print(f"  Code: {code}")
+    print("=" * 50 + "\n")
+
+    return Response({
+        'message': 'Account created! Please verify your email with the code.',
+        'email': email,
+        'requires_verification': True,
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_code(request):
+    """Verify email with 6-digit code"""
+    email = request.data.get('email')
+    code = request.data.get('code')
+
+    if not email or not code:
+        return Response({'error': 'Email and verification code are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if user.is_email_verified:
+        return Response({'message': 'Email is already verified.'}, status=status.HTTP_200_OK)
+
+    if user.verification_token == code:
+        user.is_email_verified = True
+        user.verification_token = ''
+        user.save()
+        return Response({'message': 'Email verified successfully! You can now log in.'}, status=status.HTTP_200_OK)
+    else:
+        return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -37,6 +110,7 @@ class UserRegistrationView(APIView):
                 token = email_token_generator.make_token(user)
                 uid = urlsafe_base64_encode(force_bytes(user.email))
                 verification_link = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}"
+                print(verification_link)
                 send_verification_email_task.delay(user.email, verification_link)
         except Exception as e:
             if "user" in locals():

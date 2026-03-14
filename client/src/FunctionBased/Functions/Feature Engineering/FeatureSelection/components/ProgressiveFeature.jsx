@@ -1,12 +1,16 @@
-import { Input, Progress, Radio, Button } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import Plot from "react-plotly.js";
-import SingleDropDown from "../../../../Components/SingleDropDown/SingleDropDown";
-import MultipleDropDown from "../../../../Components/MultipleDropDown/MultipleDropDown";
 import AgGridAutoDataComponent from "../../../../Components/AgGridComponent/AgGridAutoDataComponent";
 import { toast } from "react-toastify";
 import { apiService } from "../../../../../services/api/apiService";
+import TextField from "@mui/material/TextField";
+import LinearProgress from "@mui/material/LinearProgress";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Button from "@mui/material/Button";
+import Autocomplete from "@mui/material/Autocomplete";
 
 function ProgressiveFeature({ csvData }) {
   const [kFoldValue, setKFoldValue] = useState(2);
@@ -101,46 +105,44 @@ function ProgressiveFeature({ csvData }) {
   return (
     <div className="mt-4">
       <div className="flex gap-8">
-        <div className="w-full">
-          <Input
+        <div className="w-full sm:w-auto sm:min-w-[220px] sm:max-w-[320px]">
+          <TextField
             label="Enter the value for k-fold"
             fullWidth
             type="number"
-            step={1}
+            size="small"
+            inputProps={{ step: 1 }}
             value={kFoldValue}
             onChange={(e) => setKFoldValue(e.target.value)}
           />
         </div>
-        <div className="w-full">
-          <p>Select Estimator</p>
-          <SingleDropDown
-            columnNames={ESTIMATOR}
-            initValue={estimator}
-            onValueChange={setEstimator}
+        <div className="w-full sm:w-auto sm:min-w-[220px] sm:max-w-[320px]">
+          <p className="text-sm font-semibold text-gray-800 mb-1.5">Select Estimator</p>
+          <Autocomplete
+            size="small"
+            options={ESTIMATOR}
+            value={estimator || null}
+            onChange={(_, val) => setEstimator(val || estimator)}
+            renderInput={(params) => <TextField {...params} placeholder="Select estimator" />}
           />
         </div>
       </div>
       <div className="mt-4">
-        <Radio.Group
-          defaultValue={option}
-          onChange={(e) => setOption(e)}
-          orientation="horizontal"
-        >
-          <Radio value="All" color="success">
-            All
-          </Radio>
-          <Radio value="Custom" color="success">
-            Custom
-          </Radio>
-        </Radio.Group>
+        <RadioGroup row value={option} onChange={(e) => setOption(e.target.value)}>
+          <FormControlLabel value="All" control={<Radio size="small" />} label="All" />
+          <FormControlLabel value="Custom" control={<Radio size="small" />} label="Custom" />
+        </RadioGroup>
       </div>
       {option === "Custom" && (
         <div className="mt-4">
-          <p>Features to select</p>
-          <MultipleDropDown
-            columnNames={Object.keys(csvData[0])}
-            defaultValue={customCol}
-            setSelectedColumns={setCustomCol}
+          <p className="text-sm font-semibold text-gray-800 mb-1.5">Features to select</p>
+          <Autocomplete
+            multiple
+            size="small"
+            options={Object.keys(csvData[0])}
+            value={customCol || []}
+            onChange={(_, val) => setCustomCol(val)}
+            renderInput={(params) => <TextField {...params} placeholder="Select features" />}
           />
         </div>
       )}
@@ -148,8 +150,15 @@ function ProgressiveFeature({ csvData }) {
       <div className="mt-6 flex justify-end">
         <Button
           disabled={loading}
-          onPress={handleSubmit}
-          className="mt-12 border-2 px-6 tracking-wider bg-primary-btn text-white font-medium rounded-md py-2"
+          onClick={handleSubmit}
+          variant="contained"
+          sx={{
+            mt: 2,
+            backgroundColor: "#0D9488",
+            textTransform: "none",
+            fontWeight: 600,
+            "&:hover": { backgroundColor: "#0F766E" },
+          }}
         >
           {loading ? "Processing..." : "Submit"}
         </Button>
@@ -157,12 +166,9 @@ function ProgressiveFeature({ csvData }) {
 
       {loading && (
         <div className="mt-6">
-          <Progress
+          <LinearProgress
             value={progress}
-            shadow
-            color="success"
-            status="secondary"
-            striped
+            variant="determinate"
           />
         </div>
       )}
@@ -172,7 +178,7 @@ function ProgressiveFeature({ csvData }) {
         <div className="mt-8">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <h2 className="text-xl font-bold mt-6 mb-4">
+              <h2 className="text-lg font-semibold mt-6 mb-4">
                 Selected Feature Scores
               </h2>
               <AgGridAutoDataComponent
@@ -183,7 +189,7 @@ function ProgressiveFeature({ csvData }) {
             </div>
 
             <div>
-              <h2 className="text-xl font-bold mt-6 mb-4">
+              <h2 className="text-lg font-semibold mt-6 mb-4">
                 Dropped Feature Scores
               </h2>
               <AgGridAutoDataComponent
@@ -193,7 +199,7 @@ function ProgressiveFeature({ csvData }) {
               />
             </div>
           </div>
-          <h2 className="text-xl font-bold mt-6 mb-4">
+          <h2 className="text-lg font-semibold mt-6 mb-4">
             Feature Selection Plot
           </h2>
           <div className="flex justify-center mt-4 ">
@@ -204,7 +210,7 @@ function ProgressiveFeature({ csvData }) {
             />
           </div>
 
-          <h2 className="text-xl font-bold mt-20 mb-4">Modified Dataset</h2>
+          <h2 className="text-lg font-semibold mt-20 mb-4">Modified Dataset</h2>
           <AgGridAutoDataComponent
             rowData={csvData} // Or you can use the base64 decoded version of modified_dataset_csv if needed
             download={true}

@@ -1,4 +1,4 @@
-import { Checkbox, Input, Loading } from "@nextui-org/react";
+import { Checkbox, Input, Loading } from "../../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";
@@ -92,9 +92,9 @@ function LassoRegression({
           <h1 className="text-2xl font-medium tracking-wide mb-2">
             Hyperparameter Optimization Settings
           </h1>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="w-full flex flex-col justify-start gap-4 mt-2">
-              <div className="w-full">
+          <div className="mt-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:max-w-xs">
                 <p className="mb-1">
                   Number of iterations for hyperparameter search
                 </p>
@@ -108,13 +108,12 @@ function LassoRegression({
                       })
                     )
                   }
-                  fullWidth
                   bordered
-                  color="success"
                   type="number"
+                  className="w-full"
                 />
               </div>
-              <div className="w-full">
+              <div className="md:max-w-xs">
                 <p className="mb-1">Number of cross-validation folds</p>
                 <Input
                   onChange={(e) =>
@@ -125,13 +124,12 @@ function LassoRegression({
                       })
                     )
                   }
-                  fullWidth
                   bordered
-                  color="success"
                   type="number"
+                  className="w-full"
                 />
               </div>
-              <div className="w-full">
+              <div className="md:max-w-xs">
                 <p className="mb-1">Random state for hyperparameter search</p>
                 <Input
                   onChange={(e) =>
@@ -143,14 +141,13 @@ function LassoRegression({
                       })
                     )
                   }
-                  fullWidth
                   bordered
-                  color="success"
                   type="number"
+                  className="w-full"
                 />
               </div>
             </div>
-            <div className="w-full">
+            <div className="w-full mt-4">
               {hData && hData.result && (
                 <>
                   <p className="mb-2 font-medium tracking-wide">
@@ -161,7 +158,7 @@ function LassoRegression({
               )}
               {loading && (
                 <div className="grid place-content-center h-full">
-                  <Loading size="lg" color={"success"}>
+                  <Loading size="lg">
                     Fetching Data...
                   </Loading>
                 </div>
@@ -192,7 +189,6 @@ function LassoRegression({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Alpha"
             value={optimizedData.alpha}
             onChange={(e) =>
@@ -208,13 +204,11 @@ function LassoRegression({
               setOptimizedData({ ...optimizedData, max_iter: e.target.value })
             }
             bordered
-            color="success"
             label="Max Iterations"
           />
           <Input
             fullWidth
             bordered
-            color="success"
             type="number"
             value={optimizedData.tol}
             onChange={(e) =>
@@ -241,7 +235,6 @@ function LassoRegression({
                 fit_intercept: e.valueOf(),
               })
             }
-            color="success"
             size={Type === "node" ? "sm" : "md"}
           >
             Fit Intercept
@@ -254,7 +247,6 @@ function LassoRegression({
                 warm_start: e.valueOf(),
               })
             }
-            color="success"
             size={Type === "node" ? "sm" : "md"}
           >
             Warm Start

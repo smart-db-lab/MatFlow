@@ -1,4 +1,4 @@
-import { Checkbox, Input, Loading } from "@nextui-org/react";
+import { Checkbox, Input, Loading } from "../../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";
@@ -113,7 +113,6 @@ function DecisionTreeClassification({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -130,7 +129,6 @@ function DecisionTreeClassification({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -148,7 +146,6 @@ function DecisionTreeClassification({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -164,7 +161,7 @@ function DecisionTreeClassification({
               )}
               {loading && (
                 <div className="grid place-content-center h-full">
-                  <Loading size="lg" color={"success"}>
+                  <Loading size="lg">
                     Fetching Data...
                   </Loading>
                 </div>
@@ -195,7 +192,6 @@ function DecisionTreeClassification({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Min. Samples Split"
             value={optimizedData.min_samples_split || 2}
             onChange={(e) =>
@@ -210,7 +206,6 @@ function DecisionTreeClassification({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Min. Samples Leaf"
             value={optimizedData.min_samples_leaf || 2}
             onChange={(e) =>
@@ -225,7 +220,6 @@ function DecisionTreeClassification({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Random State"
             value={optimizedData.random_state || 2}
             onChange={(e) =>
@@ -264,7 +258,6 @@ function DecisionTreeClassification({
             />
           </div>
           <Checkbox
-            color="success"
             isSelected={!!optimizedData.none}
             onChange={(e) =>
               setOptimizedData({ ...optimizedData, none: e.valueOf() })

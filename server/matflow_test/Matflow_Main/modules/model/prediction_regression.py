@@ -11,38 +11,117 @@ from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from eda.graph.plotly_theme import apply_modern_theme, MODERN_COLORS
 
 def prediction_regression(file):
-    target_var = file.get( "Target Variable")
-    data = pd.DataFrame(file.get("file"))
+    target_var = file.get("Target Variable")
+    
+    # Get the dataset - now seamlessly injected by _inject_workspace from workspace_id and filename
+    data_dict = file.get("file", [])
+    
+    if not data_dict:
+        raise ValueError("Dataset not found. Ensure workspace_id and filename are properly provided.")
+    
+    data = pd.DataFrame(data_dict)
     X, y = utils.split_xy(data, target_var)
     y_pred = file.get("y_pred")
+    
+    # Parse y_pred if it's a JSON string
+    if isinstance(y_pred, str):
+        try:
+            import json
+            y_pred = json.loads(y_pred)
+        except:
+            pass
+    
     result_opt = file.get("Result")
-    return show_result(y, y_pred, result_opt)
+    return show_result(y, y_pred, result_opt, X=X)
 
-def show_result(y, y_pred, result_opt):
+def show_result(y, y_pred, result_opt, X=None):
+    # Ensure arrays are numpy arrays and flatten them
+    y = np.asarray(y).flatten()
+    y_pred = np.asarray(y_pred).flatten()
+
+    # Align lengths defensively to avoid broadcasting errors when upstream
+    # provides mismatched arrays (e.g., full y vs. test-set y_pred)
+    min_len = min(len(y), len(y_pred))
+    if len(y) != len(y_pred):
+        y = y[:min_len]
+        y_pred = y_pred[:min_len]
     if result_opt == "Target Value":
-        result = pd.DataFrame({
-            "Actual": y,
-            "Predicted": y_pred
-        })
+        if X is not None:
+            result = X.copy().reset_index(drop=True)
+            result["Actual"] = pd.Series(y).reset_index(drop=True)
+            result["Predicted"] = pd.Series(y_pred).reset_index(drop=True)
+        else:
+            result = pd.DataFrame({"Actual": y, "Predicted": y_pred})
         result = result.to_json(orient="records")
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=list(range(len(y))), y=y, mode='lines', name='Actual',
-            line=dict(color=MODERN_COLORS[0], width=2.5),
-        ))
-        fig.add_trace(go.Scatter(
-            x=list(range(len(y_pred))), y=y_pred, mode='lines', name='Predicted',
-            line=dict(color=MODERN_COLORS[1], width=2.5, dash='dot'),
-            fill='tonexty',
-            fillcolor='rgba(54,162,235,0.06)',
-        ))
-        apply_modern_theme(fig, title="Actual vs. Predicted Values")
-        fig.update_layout(
-            xaxis=dict(title='Sample Index'),
-            yaxis=dict(title='Value'),
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        )
-        graph_json = fig.to_json()
+        
+        # Convert to ECharts format
+        actual_data = [[i, float(val)] for i, val in enumerate(y)]
+        predicted_data = [[i, float(val)] for i, val in enumerate(y_pred)]
+        
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": "Actual vs. Predicted Values",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "axis",
+                "axisPointer": {"type": "cross"},
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "8%",
+                "right": "4%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Sample Index",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Value",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "legend": {
+                "orient": "horizontal",
+                "bottom": "0%",
+                "left": "center",
+                "textStyle": {"color": "#374151", "fontSize": 12}
+            },
+            "series": [
+                {
+                    "name": "Actual",
+                    "type": "line",
+                    "data": actual_data,
+                    "smooth": 0.3,
+                    "lineStyle": {"width": 2.5, "color": "#ff6384"},
+                    "itemStyle": {"color": "#ff6384"},
+                    "areaStyle": {"color": "rgba(255, 99, 132, 0.08)"}
+                },
+                {
+                    "name": "Predicted",
+                    "type": "line",
+                    "data": predicted_data,
+                    "smooth": 0.3,
+                    "lineStyle": {"width": 2.5, "color": "#36a2eb", "type": "dashed"},
+                    "itemStyle": {"color": "#36a2eb"},
+                    "areaStyle": {"color": "rgba(54, 162, 235, 0.08)"}
+                }
+            ]
+        }
+        graph_json = [option]
         return JsonResponse({"table": result, "graph": graph_json})
 
     elif result_opt == "R2 Score":
@@ -59,136 +138,397 @@ def show_result(y, y_pred, result_opt):
         return JsonResponse({"value": result})
 
     elif result_opt == "Actual vs. Predicted":
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=list(range(len(y))), y=y, mode='lines', name='Actual',
-            line=dict(color=MODERN_COLORS[0], width=2.5),
-        ))
-        fig.add_trace(go.Scatter(
-            x=list(range(len(y_pred))), y=y_pred, mode='lines', name='Predicted',
-            line=dict(color=MODERN_COLORS[1], width=2.5, dash='dot'),
-            fill='tonexty',
-            fillcolor='rgba(54,162,235,0.06)',
-        ))
-        apply_modern_theme(fig, title="Actual vs. Predicted Values")
-        fig.update_layout(
-            xaxis=dict(title='Sample Index'),
-            yaxis=dict(title='Value'),
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        )
-        return JsonResponse({'graph': fig.to_json()})
+        if X is not None:
+            tbl = X.copy().reset_index(drop=True)
+            tbl["Actual"] = pd.Series(y).reset_index(drop=True)
+            tbl["Predicted"] = pd.Series(y_pred).reset_index(drop=True)
+        else:
+            tbl = pd.DataFrame({"Actual": y, "Predicted": y_pred})
+        
+        # Convert to ECharts format
+        actual_data = [[i, float(val)] for i, val in enumerate(y)]
+        predicted_data = [[i, float(val)] for i, val in enumerate(y_pred)]
+        
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": "Actual vs. Predicted Values",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "axis",
+                "axisPointer": {"type": "cross"},
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "8%",
+                "right": "4%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Sample Index",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Value",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "legend": {
+                "orient": "horizontal",
+                "bottom": "0%",
+                "left": "center",
+                "textStyle": {"color": "#374151", "fontSize": 12}
+            },
+            "series": [
+                {
+                    "name": "Actual",
+                    "type": "line",
+                    "data": actual_data,
+                    "smooth": 0.3,
+                    "lineStyle": {"width": 2.5, "color": "#ff6384"},
+                    "itemStyle": {"color": "#ff6384"},
+                    "areaStyle": {"color": "rgba(255, 99, 132, 0.08)"}
+                },
+                {
+                    "name": "Predicted",
+                    "type": "line",
+                    "data": predicted_data,
+                    "smooth": 0.3,
+                    "lineStyle": {"width": 2.5, "color": "#36a2eb", "type": "dashed"},
+                    "itemStyle": {"color": "#36a2eb"},
+                    "areaStyle": {"color": "rgba(54, 162, 235, 0.08)"}
+                }
+            ]
+        }
+        return JsonResponse({'table': tbl.to_json(orient='records'), 'graph': [option]})
 
     elif result_opt == "Residuals vs. Predicted":
         residuals = y - y_pred
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=y_pred, y=residuals, mode='markers', name='Residuals',
-            marker=dict(
-                color=MODERN_COLORS[1], size=8, opacity=0.65,
-                line=dict(width=1, color='rgba(255,255,255,0.8)'),
-            ),
-        ))
-        # Zero line
-        fig.add_shape(
-            type="line", x0=min(y_pred), y0=0, x1=max(y_pred), y1=0,
-            line=dict(color=MODERN_COLORS[0], dash="dash", width=2),
-        )
-        apply_modern_theme(fig, title='Residuals vs. Predicted')
-        fig.update_layout(
-            xaxis=dict(title='Predicted Value'),
-            yaxis=dict(title='Residual'),
-        )
-        return JsonResponse({'graph': fig.to_json()})
+        data = [[float(pred), float(res)] for pred, res in zip(y_pred, residuals)]
+        
+        # Calculate axis limits for reference line
+        axis_min = min(y_pred)
+        axis_max = max(y_pred)
+        zero_line = [[float(axis_min), 0], [float(axis_max), 0]]
+        
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": "Residuals vs. Predicted",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "item",
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "8%",
+                "right": "4%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Predicted Value",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Residual",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "series": [
+                {
+                    "name": "Residuals",
+                    "type": "scatter",
+                    "data": data,
+                    "itemStyle": {"color": "#36a2eb", "opacity": 0.65, "borderColor": "#ffffff", "borderWidth": 1},
+                    "symbolSize": 6
+                },
+                {
+                    "name": "Zero Reference",
+                    "type": "line",
+                    "data": zero_line,
+                    "lineStyle": {"color": "#ff6384", "type": "dashed", "width": 1.5},
+                    "itemStyle": {"color": "#ff6384"},
+                    "smooth": False
+                }
+            ]
+        }
+        return JsonResponse({'graph': [option]})
 
     elif result_opt == "Histogram of Residuals":
         residuals = y - y_pred
-        fig = go.Figure()
-        fig.add_trace(go.Histogram(
-            x=residuals, nbinsx=15,
-            marker_color=MODERN_COLORS[1],
-            marker_line=dict(width=1.5, color='rgba(255,255,255,0.8)'),
-            opacity=0.85,
-        ))
-        apply_modern_theme(fig, title="Histogram of Residuals")
-        fig.update_layout(
-            xaxis=dict(title="Residual Value"),
-            yaxis=dict(title="Frequency"),
-            bargap=0.05,
-        )
-        return JsonResponse({'graph': fig.to_json()})
+        hist, bin_edges = np.histogram(residuals, bins=15)
+        bin_centers = [(bin_edges[i] + bin_edges[i+1]) / 2 for i in range(len(bin_edges)-1)]
+        data = [[float(bc), int(h)] for bc, h in zip(bin_centers, hist)]
+        
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": "Histogram of Residuals",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "axis",
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "8%",
+                "right": "4%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Residual Value",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Frequency",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "series": [
+                {
+                    "name": "Frequency",
+                    "type": "bar",
+                    "data": data,
+                    "itemStyle": {"color": "#36a2eb", "borderColor": "#ffffff", "borderWidth": 1, "opacity": 0.85},
+                    "barGap": "5%"
+                }
+            ]
+        }
+        return JsonResponse({'graph': [option]})
 
     elif result_opt == "QQ Plot":
         residuals = y - y_pred
         qq = stats.probplot(residuals, dist="norm")
         theoretical = qq[0][0]
         sample = qq[0][1]
-
-        fig = go.Figure()
-        # Reference line (45-degree)
+        
+        scatter_data = [[float(t), float(s)] for t, s in zip(theoretical, sample)]
         line_min = min(theoretical.min(), sample.min())
         line_max = max(theoretical.max(), sample.max())
-        fig.add_trace(go.Scatter(
-            x=[line_min, line_max], y=[line_min, line_max],
-            mode='lines', name='Reference',
-            line=dict(color=MODERN_COLORS[0], width=2, dash='dash'),
-        ))
-        # QQ scatter
-        fig.add_trace(go.Scatter(
-            x=theoretical, y=sample, mode='markers', name='Sample Quantiles',
-            marker=dict(
-                color=MODERN_COLORS[1], size=7, opacity=0.7,
-                line=dict(width=1, color='rgba(255,255,255,0.8)'),
-            ),
-        ))
-        apply_modern_theme(fig, title="Normal Q-Q Plot")
-        fig.update_layout(
-            xaxis=dict(title="Theoretical Quantiles"),
-            yaxis=dict(title="Sample Quantiles"),
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        )
-        return JsonResponse({'graph': pio.to_json(fig)})
+        ref_line_data = [[float(line_min), float(line_min)], [float(line_max), float(line_max)]]
+        
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": "Normal Q-Q Plot",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "item",
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "8%",
+                "right": "4%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Theoretical Quantiles",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Sample Quantiles",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "legend": {
+                "orient": "horizontal",
+                "bottom": "0%",
+                "left": "center",
+                "textStyle": {"color": "#374151", "fontSize": 12}
+            },
+            "series": [
+                {
+                    "name": "Reference",
+                    "type": "line",
+                    "data": ref_line_data,
+                    "lineStyle": {"color": "#ff6384", "type": "dashed", "width": 2},
+                    "itemStyle": {"color": "#ff6384"},
+                    "smooth": False
+                },
+                {
+                    "name": "Sample Quantiles",
+                    "type": "scatter",
+                    "data": scatter_data,
+                    "itemStyle": {"color": "#36a2eb", "opacity": 0.7, "borderColor": "#ffffff", "borderWidth": 1},
+                    "symbolSize": 6
+                }
+            ]
+        }
+        return JsonResponse({'graph': [option]})
 
     elif result_opt == "Box Plot of Residuals":
         residuals = y - y_pred
-        fig = go.Figure()
-        fig.add_trace(go.Box(
-            y=residuals, name='Residuals',
-            marker_color=MODERN_COLORS[1],
-            line_color=MODERN_COLORS[1],
-            fillcolor='rgba(54,162,235,0.15)',
-            boxmean='sd',
-        ))
-        apply_modern_theme(fig, title='Box Plot of Residuals')
-        fig.update_layout(
-            yaxis=dict(title='Residual Value'),
-        )
-        return JsonResponse({'graph': fig.to_json()})
+        residuals_sorted = np.sort(residuals)
+        q1 = np.percentile(residuals_sorted, 25)
+        median = np.percentile(residuals_sorted, 50)
+        q3 = np.percentile(residuals_sorted, 75)
+        whisker_low = np.percentile(residuals_sorted, 5)
+        whisker_high = np.percentile(residuals_sorted, 95)
+        
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": "Box Plot of Residuals",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "item",
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "15%",
+                "right": "10%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "category",
+                "data": ["Residuals"],
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Residual Value",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "series": [
+                {
+                    "name": "Residuals",
+                    "type": "boxplot",
+                    "data": [[
+                        float(whisker_low),
+                        float(q1),
+                        float(median),
+                        float(q3),
+                        float(whisker_high)
+                    ]],
+                    "itemStyle": {"color": "#36a2eb", "borderColor": "#1f2937", "borderWidth": 1.5, "opacity": 0.85}
+                }
+            ]
+        }
+        return JsonResponse({'graph': [option]})
 
     elif result_opt == "Regression Line Plot":
-        fig = go.Figure()
-        # Scatter points
-        fig.add_trace(go.Scatter(
-            x=y, y=y_pred, mode='markers', name='Predictions',
-            marker=dict(
-                color=MODERN_COLORS[1], size=8, opacity=0.6,
-                line=dict(width=1, color='rgba(255,255,255,0.8)'),
-            ),
-        ))
-        # Perfect prediction line (y=x)
+        scatter_data = [[float(a), float(p)] for a, p in zip(y, y_pred)]
         axis_min = min(min(y), min(y_pred))
         axis_max = max(max(y), max(y_pred))
-        fig.add_trace(go.Scatter(
-            x=[axis_min, axis_max], y=[axis_min, axis_max],
-            mode='lines', name='Perfect Fit',
-            line=dict(color=MODERN_COLORS[0], width=2.5, dash='dash'),
-        ))
-        apply_modern_theme(fig, title='Regression Line Plot')
-        fig.update_layout(
-            xaxis=dict(title='Actual Value'),
-            yaxis=dict(title='Predicted Value'),
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        )
-        return JsonResponse({'graph': fig.to_json()})
+        perfect_line = [[float(axis_min), float(axis_min)], [float(axis_max), float(axis_max)]]
+        
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": "Regression Line Plot",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "item",
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "8%",
+                "right": "4%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Actual Value",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Predicted Value",
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "legend": {
+                "orient": "horizontal",
+                "bottom": "0%",
+                "left": "center",
+                "textStyle": {"color": "#374151", "fontSize": 12}
+            },
+            "series": [
+                {
+                    "name": "Predictions",
+                    "type": "scatter",
+                    "data": scatter_data,
+                    "itemStyle": {"color": "#36a2eb", "opacity": 0.6, "borderColor": "#ffffff", "borderWidth": 1},
+                    "symbolSize": 6
+                },
+                {
+                    "name": "Perfect Fit",
+                    "type": "line",
+                    "data": perfect_line,
+                    "lineStyle": {"color": "#ff6384", "type": "dashed", "width": 2.5},
+                    "itemStyle": {"color": "#ff6384"},
+                    "smooth": False
+                }
+            ]
+        }
+        return JsonResponse({'graph': [option]})
 
     elif result_opt == "Metrics Summary":
         r2 = r2_score(y, y_pred)

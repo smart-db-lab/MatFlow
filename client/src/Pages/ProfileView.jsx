@@ -14,6 +14,7 @@ function ProfileView({ standalone = false }) {
   const [fieldInput, setFieldInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const fileInputRef = useRef(null);
@@ -23,13 +24,20 @@ function ProfileView({ standalone = false }) {
     else dispatch(setShowProfile(false));
   };
 
+  const withCacheBust = (url) => {
+    if (!url || url.startsWith('data:')) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}t=${Date.now()}`;
+  };
+
   useEffect(() => {
     (async () => {
       try {
         const data = await commonApi.auth.getCurrentUser();
         const user = data?.user || data;
         setUserData(user || null);
-        setImagePreview(user?.profile_image_url || null);
+        setImagePreview(user?.profile_image_url ? withCacheBust(user.profile_image_url) : null);
+        setImageLoadFailed(false);
       } catch (e) {
         console.error('Failed to load profile:', e);
         setUserData(null);
@@ -75,6 +83,7 @@ function ProfileView({ standalone = false }) {
     if (!file.type.startsWith('image/')) { toast.error('Select a valid image'); return; }
     if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5 MB'); return; }
     setSelectedImageFile(file);
+    setImageLoadFailed(false);
     const reader = new FileReader();
     reader.onloadend = () => setImagePreview(reader.result);
     reader.readAsDataURL(file);
@@ -89,8 +98,10 @@ function ProfileView({ standalone = false }) {
       const data = await commonApi.auth.updateCurrentUser(fd);
       const u = data?.user || data;
       if (u) {
-        setUserData(u);
-        if (u.profile_image_url) setImagePreview(u.profile_image_url);
+        const refreshedImageUrl = u.profile_image_url ? withCacheBust(u.profile_image_url) : null;
+        setUserData({ ...u, profile_image_url: refreshedImageUrl });
+        if (refreshedImageUrl) setImagePreview(refreshedImageUrl);
+        setImageLoadFailed(false);
         setSelectedImageFile(null);
         toast.success('Photo updated');
         window.dispatchEvent(new Event('profileUpdated'));
@@ -177,8 +188,13 @@ function ProfileView({ standalone = false }) {
             <div className="flex flex-col sm:flex-row gap-5 -mt-14 sm:-mt-12">
               {/* Avatar */}
               <div className="relative shrink-0 self-start">
-                {imagePreview || userData.profile_image_url ? (
-                  <img src={imagePreview || userData.profile_image_url} alt="" className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-4 border-white shadow-lg bg-white" />
+                {(imagePreview || userData.profile_image_url) && !imageLoadFailed ? (
+                  <img
+                    src={imagePreview || userData.profile_image_url}
+                    alt=""
+                    onError={() => setImageLoadFailed(true)}
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-4 border-white shadow-lg bg-white"
+                  />
                 ) : (
                   <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-br from-primary to-teal-600 border-4 border-white shadow-lg flex items-center justify-center text-white text-3xl font-bold select-none">
                     {getInitials()}
@@ -207,7 +223,7 @@ function ProfileView({ standalone = false }) {
                     <button onClick={handleImageUpload} disabled={uploadingImage} className="px-3 py-1.5 text-xs font-medium bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 transition-colors">
                       {uploadingImage ? 'Uploading...' : 'Save Photo'}
                     </button>
-                    <button onClick={() => { setSelectedImageFile(null); setImagePreview(userData.profile_image_url || null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="px-3 py-1.5 text-xs font-medium text-gray-600 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
+                    <button onClick={() => { setSelectedImageFile(null); setImagePreview(userData.profile_image_url || null); setImageLoadFailed(false); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="px-3 py-1.5 text-xs font-medium text-gray-600 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
                       Cancel
                     </button>
                   </div>

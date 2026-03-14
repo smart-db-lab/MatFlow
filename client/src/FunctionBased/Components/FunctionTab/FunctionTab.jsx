@@ -10,8 +10,16 @@ import { setActiveFunction } from '../../../Slices/SideBarSlice';
 import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import TranslateOutlinedIcon from '@mui/icons-material/TranslateOutlined';
+import QueryStatsOutlinedIcon from '@mui/icons-material/QueryStatsOutlined';
+import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
+import BiotechOutlinedIcon from '@mui/icons-material/BiotechOutlined';
+import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import { styled } from '@mui/material';
 import { PiGraph } from 'react-icons/pi';
+import { useParams } from 'react-router-dom';
+import { getProjectSessionKey, sessionGetJson, sessionGetString, sessionSetJson, sessionSetString } from '../../../util/sessionProjectStorage';
 
 const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
   color: '#374151',
@@ -90,37 +98,46 @@ const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
 
 const iconColorForLabel = (label = '') => {
   const key = label.toLowerCase();
-  if (key.includes('forwardml')) return '#2563eb';
+  if (key.includes('forwardml') || key.includes('computational ml model')) return '#2563eb';
   if (key.includes('reverseml')) return '#ea580c';
   if (key.includes('dataset')) return '#0D9488';
+  if (key.includes('explore dataset')) return '#0D9488';
   if (key.includes('model')) return '#2563eb';
   if (key.includes('feature')) return '#7c3aed';
+  if (key.includes('materials descriptor generation')) return '#7c3aed';
   if (key.includes('time')) return '#0284c7';
   if (key.includes('reverse') || key.includes('smiles')) return '#ea580c';
   if (key.includes('evaluation')) return '#0ea5e9';
   if (key.includes('prediction')) return '#16a34a';
   if (key.includes('split')) return '#a16207';
-  if (key.includes('statistics') || key.includes('corelation')) return '#0891b2';
+  if (key.includes('statistics') || key.includes('correlation')) return '#0891b2';
   if (key.includes('group')) return '#9333ea';
   if (key.includes('information')) return '#4f46e5';
   if (key.includes('duplicate')) return '#dc2626';
   if (key.includes('display')) return '#0d9488';
   if (key.includes('eda')) return '#14b8a6';
+  if (key.includes('exploratory data analysis') || key.includes('visual data analysis')) return '#14b8a6';
   return '#6b7280';
 };
 
 const iconBadgeForLabel = (label = '') => {
   const key = label.toLowerCase();
-  if (key.includes('forwardml') || key.includes('model')) {
+  if (key.includes('forwardml') || key.includes('computational ml model') || key.includes('model')) {
     return { bg: '#eff6ff', border: '#bfdbfe', color: '#2563eb' };
   }
   if (key.includes('feature')) {
     return { bg: '#f5f3ff', border: '#ddd6fe', color: '#7c3aed' };
   }
+  if (key.includes('materials descriptor generation')) {
+    return { bg: '#f5f3ff', border: '#ddd6fe', color: '#7c3aed' };
+  }
   if (key.includes('reverseml') || key.includes('smiles') || key.includes('pso')) {
     return { bg: '#fff7ed', border: '#fed7aa', color: '#ea580c' };
   }
-  if (key.includes('eda') || key.includes('statistics') || key.includes('corelation')) {
+  if (key.includes('eda') || key.includes('statistics') || key.includes('correlation')) {
+    return { bg: '#ecfeff', border: '#a5f3fc', color: '#0891b2' };
+  }
+  if (key.includes('exploratory data analysis') || key.includes('visual data analysis')) {
     return { bg: '#ecfeff', border: '#a5f3fc', color: '#0891b2' };
   }
   if (key.includes('final')) {
@@ -135,10 +152,18 @@ const iconBadgeForLabel = (label = '') => {
 const getNodeIcon = (label = '', hasChildren = false) => {
   const key = label.toLowerCase();
 
+  if (key.includes('pso')) return <HubOutlinedIcon fontSize="small" />;
+  if (key.includes('smiles generation')) return <AutoAwesomeOutlinedIcon fontSize="small" />;
+  if (key.includes('smiles to iupac')) return <TranslateOutlinedIcon fontSize="small" />;
+  if (key.includes('smiles to synthetic score')) return <QueryStatsOutlinedIcon fontSize="small" />;
+  if (key.includes('smiles to dft')) return <ScienceOutlinedIcon fontSize="small" />;
+  if (key.includes('smiles structure')) return <BiotechOutlinedIcon fontSize="small" />;
   if (key.includes('dataset')) return <MdOutlineDataset size={18} />;
   if (key.includes('eda')) return <SlMagnifier size={17} />;
+  if (key.includes('exploratory data analysis') || key.includes('visual data analysis')) return <SlMagnifier size={17} />;
   if (key.includes('feature')) return <RxGear size={17} />;
-  if (key.includes('forwardml') || key.includes('model building')) return <TbBrain size={18} />;
+  if (key.includes('materials descriptor generation')) return <RxGear size={17} />;
+  if (key.includes('forwardml') || key.includes('computational ml model') || key.includes('model building') || key.includes('generate predictive model')) return <TbBrain size={18} />;
   if (key.includes('reverseml')) return <HiOutlinePuzzle size={18} />;
   if (key.includes('final')) return <HiOutlineDocumentReport size={17} />;
   if (key.includes('split')) return <PiGraph size={16} />;
@@ -149,7 +174,7 @@ const getNodeIcon = (label = '', hasChildren = false) => {
   if (key.includes('time')) return <AiOutlineLineChart size={16} />;
   if (key.includes('information')) return <HiOutlineDocumentReport size={16} />;
   if (key.includes('statistics')) return <AiOutlineLineChart size={16} />;
-  if (key.includes('corelation')) return <PiGraph size={16} />;
+  if (key.includes('correlation')) return <PiGraph size={16} />;
   if (key.includes('duplicate')) return <HiOutlineDocumentReport size={16} />;
   if (key.includes('group')) return <HiOutlinePuzzle size={16} />;
   if (key.includes('display')) return <HiOutlineDocumentReport size={16} />;
@@ -162,61 +187,36 @@ const getNodeIcon = (label = '', hasChildren = false) => {
 const functionTreeData = [
   {
     id: '0',
-    label: 'Dataset',
+    label: 'Explore Dataset',
     icon: <MdOutlineDataset size={18} />,
-    children: [
-      {
-        id: '0-0',
-        label: 'Display',
-      },
-      {
-        id: '0-1',
-        label: 'Information',
-      },
-      {
-        id: '0-2',
-        label: 'Statistics',
-      },
-      {
-        id: '0-3',
-        label: 'Corelation',
-      },
-      {
-        id: '0-4',
-        label: 'Duplicate',
-      },
-      {
-        id: '0-5',
-        label: 'Group',
-      },
-    ],
+    children: [], // Dataset tools shown as tag buttons
   },
   {
     id: '1',
-    label: 'EDA',
+    label: 'Visual Data Analysis',
     icon: <SlMagnifier size={17} />,
     children: [],
   },
   {
     id: '2',
-    label: 'Feature Engineering',
+    label: 'Materials Descriptor Generation',
     icon: <RxGear size={17} />,
     children: [], // No dropdown: access via tag buttons in the right panel
   },
   {
     id: '3',
-    label: 'Final Dataset',
+    label: 'Model-Ready Dataset',
     icon: <HiOutlineDocumentReport size={17} />,
     children: [],
   },
   {
     id: '5',
-    label: 'ForwardML',
+    label: 'Computational ML Model',
     icon: <TbBrain size={18} />,
     children: [
       {
         id: '5-0',
-        label: 'Model Building',
+        label: 'Generate Predictive Model',
         children: [
           {
             id: '5-0-0',
@@ -242,12 +242,12 @@ const functionTreeData = [
       },
       {
         id: '5-1',
-        label: 'Model Deployment',
+        label: 'Materials Property Prediction',
       },
-      {
-        id: '5-2',
-        label: 'Time Series Analysis',
-      },
+      // {
+      //   id: '5-2',
+      //   label: 'Time Series Analysis',
+      // },
     ],
   },
   {
@@ -288,11 +288,20 @@ const functionTreeData = [
 ];
 
 function FunctionTab() {
+  const { projectId } = useParams();
   const activeCsvFile = useSelector((state) => state.uploadedFile.activeFile);
   const activeFunctionFromRedux = useSelector((state) => state.sideBar.activeFunction);
   const dispatch = useDispatch();
   const [expanded, setExpanded] = useState([]);
   const [selected, setSelected] = useState('');
+  const scopedActiveFunctionKey = getProjectSessionKey('activeFunction', projectId);
+  const scopedExpandedNodesKey = getProjectSessionKey('expandedNodes', projectId);
+  const selectedDatasetName = (() => {
+    const rawName = activeCsvFile?.name || '';
+    if (!rawName) return '';
+    const segments = rawName.split(/[\\/]/);
+    return segments[segments.length - 1] || rawName;
+  })();
 
   const getAncestorPath = (nodeId) =>
     nodeId
@@ -302,6 +311,24 @@ function FunctionTab() {
         acc.push(arr.slice(0, i + 1).join('-'));
         return acc;
       }, []);
+
+  const sanitizeExpandedNodes = (nodeIds) => {
+    const safeNodeIds = Array.isArray(nodeIds) ? nodeIds.filter(Boolean) : [];
+    return [...new Set(safeNodeIds)];
+  };
+
+  const toSingleBranchExpandedNodes = (nodeIds) => {
+    const safeNodeIds = sanitizeExpandedNodes(nodeIds);
+    if (safeNodeIds.length === 0) return [];
+
+    // Pick deepest node to avoid relying on array order from TreeView events.
+    const pivotNodeId = safeNodeIds.reduce((deepest, current) => {
+      const deepestDepth = deepest.split('-').length;
+      const currentDepth = current.split('-').length;
+      return currentDepth >= deepestDepth ? current : deepest;
+    });
+    return [...new Set([...getAncestorPath(pivotNodeId), pivotNodeId])];
+  };
 
   // Find nodeId from label
   const findNodeIdByLabel = (nodes, label) => {
@@ -316,24 +343,23 @@ function FunctionTab() {
   };
 
   useEffect(() => {
-    const storedActiveLeaf = localStorage.getItem('activeFunction');
+    const storedActiveLeaf = sessionGetString('activeFunction', projectId);
+    const storedExpanded = toSingleBranchExpandedNodes(sessionGetJson('expandedNodes', projectId, []));
+    let nextExpanded = storedExpanded;
+
     if (storedActiveLeaf) {
       const nodeId = findNodeIdByLabel(functionTreeData, storedActiveLeaf);
       if (nodeId) {
         setSelected(nodeId);
-        // Keep a single expanded branch (accordion behavior)
         const parentIds = getAncestorPath(nodeId);
-        setExpanded(parentIds);
-        localStorage.setItem('expandedNodes', JSON.stringify(parentIds));
+        nextExpanded = [...new Set([...parentIds])];
       }
       dispatch(setActiveFunction(storedActiveLeaf));
     }
-    const storedExpanded =
-      JSON.parse(localStorage.getItem('expandedNodes')) || [];
-    // Ensure storedExpanded is always an array
-    const safeExpanded = Array.isArray(storedExpanded) ? storedExpanded : [];
-    setExpanded(safeExpanded);
-  }, [dispatch]);
+
+    setExpanded(nextExpanded);
+    sessionSetJson('expandedNodes', projectId, nextExpanded);
+  }, [dispatch, scopedActiveFunctionKey, scopedExpandedNodesKey]);
 
   // Sync selected state with Redux activeFunction
   useEffect(() => {
@@ -341,13 +367,12 @@ function FunctionTab() {
       const nodeId = findNodeIdByLabel(functionTreeData, activeFunctionFromRedux);
       if (nodeId && nodeId !== selected) {
         setSelected(nodeId);
-        // Keep a single expanded branch (accordion behavior)
         const parentIds = getAncestorPath(nodeId);
         setExpanded(parentIds);
-        localStorage.setItem('expandedNodes', JSON.stringify(parentIds));
+        sessionSetJson('expandedNodes', projectId, parentIds);
       }
     }
-  }, [activeFunctionFromRedux, selected]);
+  }, [activeFunctionFromRedux, selected, scopedExpandedNodesKey]);
 
   // Listen for custom events from chatbot
   useEffect(() => {
@@ -356,7 +381,9 @@ function FunctionTab() {
       console.log('FunctionTab received function selection:', functionId);
       setSelected(functionId);
       dispatch(setActiveFunction(functionId));
-      setExpanded(expandedNodes);
+      const nextExpanded = toSingleBranchExpandedNodes(expandedNodes);
+      setExpanded(nextExpanded);
+      sessionSetJson('expandedNodes', projectId, nextExpanded);
     };
 
     const handleForceFunctionSelection = (event) => {
@@ -364,7 +391,7 @@ function FunctionTab() {
       console.log('FunctionTab received force selection:', nodeId, label);
       setSelected(nodeId);
       dispatch(setActiveFunction(label));
-      localStorage.setItem('activeFunction', label);
+      sessionSetString('activeFunction', projectId, label);
     };
 
     window.addEventListener('functionSelected', handleFunctionSelected);
@@ -373,7 +400,7 @@ function FunctionTab() {
       window.removeEventListener('functionSelected', handleFunctionSelected);
       window.removeEventListener('forceFunctionSelection', handleForceFunctionSelection);
     };
-  }, [dispatch]);
+  }, [dispatch, scopedActiveFunctionKey]);
 
   // Function to get the label from nodeId for dispatching
   const getLabelFromNodeId = (nodeId) => {
@@ -425,12 +452,11 @@ function FunctionTab() {
       event.stopPropagation();
       setSelected(nodeId);
       dispatch(setActiveFunction(label));
-      localStorage.setItem('activeFunction', label);
+      sessionSetString('activeFunction', projectId, label);
       
-      // Ensure only the selected leaf's branch stays expanded
       const parentIds = getAncestorPath(nodeId);
       setExpanded(parentIds);
-      localStorage.setItem('expandedNodes', JSON.stringify(parentIds));
+      sessionSetJson('expandedNodes', projectId, parentIds);
     }
   };
 
@@ -469,43 +495,69 @@ function FunctionTab() {
   };
 
   return (
-    <div className="overflow-y-auto overflow-x-hidden mt-4">
+    <div className="h-full mt-4">
       {activeCsvFile ? (
-        <SimpleTreeView
-          className="text-gray-700"
-          expandedNodes={expanded}
-          selectedNodes={selected || ''}
-          onExpandedNodesChange={(_, nodeIds) => {
-            const nextExpandedRaw = Array.isArray(nodeIds) ? nodeIds : [];
-            const expandedSet = new Set(nextExpandedRaw);
+        <div className="h-full flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+            <SimpleTreeView
+              className="text-gray-700"
+              expandedNodes={expanded}
+              selectedNodes={selected || ''}
+              onExpandedNodesChange={(_, nodeIds) => {
+                const nextExpandedRaw = sanitizeExpandedNodes(nodeIds);
+                setExpanded((prevExpanded) => {
+                  const prevSafe = sanitizeExpandedNodes(prevExpanded);
+                  const prevSet = new Set(prevSafe);
+                  const nextSet = new Set(nextExpandedRaw);
 
-            // If a node was newly expanded, keep only that node path (accordion).
-            const newlyExpandedNode = nextExpandedRaw.find((id) => !expanded.includes(id));
-            const nextExpanded = newlyExpandedNode
-              ? [...getAncestorPath(newlyExpandedNode), newlyExpandedNode]
-              : nextExpandedRaw.filter((id) => expandedSet.has(id));
+                  const expandedCandidates = nextExpandedRaw.filter((id) => !prevSet.has(id));
+                  const hasExpansion = expandedCandidates.length > 0;
 
-            setExpanded(nextExpanded);
-            localStorage.setItem('expandedNodes', JSON.stringify(nextExpanded));
-          }}
-          slots={{
-            collapseIcon: ExpandMoreIcon,
-            expandIcon: ChevronRightIcon,
-          }}
-          sx={{
-            '& .MuiTreeItem-content': {
-              transition: 'background-color 160ms ease, color 160ms ease',
-            },
-            '& .MuiTreeItem-group': {
-              transition: 'padding 180ms ease, border-color 180ms ease',
-            },
-            '& .MuiTreeItem-groupTransition': {
-              transition: 'opacity 180ms ease, transform 180ms ease',
-            },
-          }}
-        >
-          {functionTreeData.map((node) => renderTree(node))}
-        </SimpleTreeView>
+                  // Keep one active branch: use the newly expanded node when available.
+                  if (hasExpansion) {
+                    const pivotNodeId = expandedCandidates.reduce((deepest, current) => {
+                      const deepestDepth = deepest.split('-').length;
+                      const currentDepth = current.split('-').length;
+                      return currentDepth >= deepestDepth ? current : deepest;
+                    }, expandedCandidates[0]);
+
+                    const nextSingleBranch = [...new Set([...getAncestorPath(pivotNodeId), pivotNodeId])];
+                    sessionSetJson('expandedNodes', projectId, nextSingleBranch);
+                    return nextSingleBranch;
+                  }
+
+                  // Collapse or external sync: respect TreeView's next ids.
+                  const nextCollapsedState = nextExpandedRaw.filter((id) => nextSet.has(id));
+                  sessionSetJson('expandedNodes', projectId, nextCollapsedState);
+                  return nextCollapsedState;
+                });
+              }}
+              slots={{
+                collapseIcon: ExpandMoreIcon,
+                expandIcon: ChevronRightIcon,
+              }}
+              sx={{
+                '& .MuiTreeItem-content': {
+                  transition: 'background-color 160ms ease, color 160ms ease',
+                },
+                '& .MuiTreeItem-group': {
+                  transition: 'padding 180ms ease, border-color 180ms ease',
+                },
+                '& .MuiTreeItem-groupTransition': {
+                  transition: 'opacity 180ms ease, transform 180ms ease',
+                },
+              }}
+            >
+              {functionTreeData.map((node) => renderTree(node))}
+            </SimpleTreeView>
+          </div>
+          <div className="mt-3 mx-2 rounded-md border border-[#D9ECE9] bg-[#F0FDFA] px-2.5 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#0D9488]">Selected dataset</p>
+            <p className="mt-0.5 truncate text-sm font-medium text-gray-800" title={selectedDatasetName}>
+              {selectedDatasetName}
+            </p>
+          </div>
+        </div>
       ) : (
         <p className="mt-4 p-2 text-center text-gray-600 tracking-wide font-bold text-lg">
           Please select a file to <br /> view the functions.

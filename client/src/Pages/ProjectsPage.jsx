@@ -4,6 +4,8 @@ import { toast } from 'react-toastify';
 import { commonApi } from '../services/api/apiService';
 import { isLoggedIn, isAuthenticated } from '../util/adminAuth';
 import { isGuestMode } from '../util/guestSession';
+import { clearIndexedDB } from '../util/indexDB';
+import { sessionSetString } from '../util/sessionProjectStorage';
 import ConfirmDeleteModal from '../Components/ConfirmDeleteModal';
 
 const STORAGE_KEY = 'mlflow_projects';
@@ -17,6 +19,14 @@ const generateUUID = () =>
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+
+const primeProjectLandingState = (projectId) => {
+  if (!projectId) return;
+  sessionSetString('currentTab', projectId, 'file');
+  sessionSetString('activeFunction', projectId, '');
+  sessionSetString('activeFileId', projectId, '');
+  sessionSetString('activeFolder', projectId, '');
+};
 
 function ProjectsPage() {
   const navigate = useNavigate();
@@ -190,7 +200,8 @@ function ProjectsPage() {
       setCurrentPage(1);
       setSearchQuery('');
       // Navigate straight into the new project's dashboard
-      navigate(`/dashboard/${newProject.id}`);
+      primeProjectLandingState(newProject.id);
+      navigate(`/matflow/dashboard/${newProject.id}`);
     } catch (_) {
       // If backend fails, stay in modal; user can retry
     }
@@ -266,6 +277,7 @@ function ProjectsPage() {
 
   const confirmDeleteProject = async () => {
     if (!projectToDelete) return;
+    const modelsDbName = `models:${projectToDelete.id}`;
 
     if (guest) {
       // Guest: remove from localStorage only
@@ -278,6 +290,9 @@ function ProjectsPage() {
       }
       if (selectedId === projectToDelete.id) setSelectedId(null);
       if (updatedProjects.length === 0) setViewMode('empty');
+      try {
+        await clearIndexedDB(modelsDbName);
+      } catch (_) {}
       setShowDeleteModal(false);
       setProjectToDelete(null);
       return;
@@ -285,6 +300,9 @@ function ProjectsPage() {
 
     try {
       await commonApi.projects.remove(projectToDelete.id);
+      try {
+        await clearIndexedDB(modelsDbName);
+      } catch (_) {}
       const updatedProjects = projects.filter((p) => p.id !== projectToDelete.id);
       setProjects(updatedProjects);
       if (updatedProjects.length > 0) {
@@ -494,7 +512,8 @@ function ProjectsPage() {
                         } cursor-pointer transition-colors`}
                         onClick={() => {
                           setSelectedId(project.id);
-                          navigate(`/dashboard/${project.id}`);
+                          primeProjectLandingState(project.id);
+                          navigate(`/matflow/dashboard/${project.id}`);
                         }}
                       >
                         <div className="flex items-center gap-3 min-w-0">
@@ -603,7 +622,7 @@ function ProjectsPage() {
       {/* Project List modal (from "Go to dashboard") */}
       {showProjectsModal && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm"
           onClick={() => setShowProjectsModal(false)}
         >
           <div
@@ -646,7 +665,8 @@ function ProjectsPage() {
                       className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm border border-transparent hover:border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => {
                         setShowProjectsModal(false);
-                        navigate(`/dashboard/${project.id}`);
+                        primeProjectLandingState(project.id);
+                        navigate(`/matflow/dashboard/${project.id}`);
                       }}
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0D9488]/10 text-[#0D9488] text-xs font-semibold">
@@ -678,20 +698,20 @@ function ProjectsPage() {
       {/* Sample project modal (Browse examples) */}
       {showSampleModal && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/30"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm"
           onClick={() => !sampleLoading && setShowSampleModal(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl border border-gray-200 max-w-md w-full mx-4 overflow-hidden"
+            className="bg-white rounded-[16px] shadow-2xl max-w-[440px] w-full mx-4 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-4 sm:p-5 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Choose a sample project</h2>
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-[1.1rem] font-bold text-gray-800">Try a sample</h2>
               <button
                 type="button"
                 disabled={sampleLoading}
                 onClick={() => setShowSampleModal(false)}
-                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors disabled:opacity-50"
+                className="p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-md transition-colors disabled:opacity-50"
                 aria-label="Close"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -699,17 +719,17 @@ function ProjectsPage() {
                 </svg>
               </button>
             </div>
-            <div className="p-4 sm:p-5 space-y-3">
+            <div className="p-6 space-y-4">
               {sampleError && (
                 <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
                   {sampleError.error || sampleError.message || 'Failed to create sample project.'}
                 </p>
               )}
               {[
-                { type: 'classification', label: 'Classification', description: 'Sample dataset for classification tasks.' },
-                { type: 'regression', label: 'Regression', description: 'Sample dataset for regression tasks.' },
-                { type: 'graph', label: 'Graph', description: 'Sample dataset for graph workflows.' },
-              ].map(({ type, label, description }) => (
+                { type: 'classification', label: 'Classification', description: 'Sample dataset for classification tasks.', color: 'bg-[#149b82]' },
+                { type: 'regression', label: 'Regression', description: 'Sample dataset for regression tasks.', color: 'bg-[#f59e0b]' },
+                { type: 'graph', label: 'Graph', description: 'Sample dataset for graph workflows.', color: 'bg-[#8b5cf6]' },
+              ].map(({ type, label, description, color }) => (
                 <button
                   key={type}
                   type="button"
@@ -739,9 +759,10 @@ function ProjectsPage() {
                       }
 
                       if (created && created.id) {
+                        primeProjectLandingState(created.id);
                         setShowSampleModal(false);
                         setSampleError(null);
-                        navigate(`/dashboard/${created.id}`);
+                        navigate(`/matflow/dashboard/${created.id}`);
                       } else {
                         const msg = created?.detail || created?.error || created?.message;
                         const isAuthError = typeof msg === 'string' && /auth|credentials|login|unauthorized/i.test(msg);
@@ -756,18 +777,15 @@ function ProjectsPage() {
                       setSampleLoading(false);
                     }
                   }}
-                  className="w-full text-left rounded-xl border border-gray-200 bg-white hover:border-[#0D9488]/60 hover:bg-[#eff6ff] p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
+                  className="w-full text-left rounded-[10px] border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0D9488]/10 text-[#0D9488] font-semibold text-sm">
+                  <div className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[8px] ${color} text-white font-bold text-lg`}>
                     {label.charAt(0)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900">{label}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+                    <p className="text-[15px] font-bold text-gray-800">{label}</p>
+                    <p className="text-[13px] text-gray-500 mt-0.5">{description}</p>
                   </div>
-                  <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
                 </button>
               ))}
             </div>
@@ -777,52 +795,81 @@ function ProjectsPage() {
 
       {/* Create / Edit modal */}
       {showModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 max-w-xl w-full mx-4 p-6 sm:p-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">{modalTitle}</h2>
-            <div className="space-y-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-[16px] shadow-2xl max-w-[460px] w-full mx-4 flex flex-col overflow-hidden">
+            <div className="px-6 py-4 bg-[#149b82] flex items-center justify-between">
+              <div className="flex items-center gap-3 text-white">
+                <svg className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                <h2 className="text-[1.1rem] font-bold tracking-wide">
+                  {modalTitle === 'Edit project' ? 'Edit Project' : 'Create New Project'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelModal}
+                className="p-1 rounded-[6px] bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/20"
+                aria-label="Close"
+              >
+                <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
               <div>
-                <label htmlFor="modal-project-name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Project name
+                <label htmlFor="modal-project-name" className="flex items-center text-[15px] mb-2">
+                  <span className="font-bold text-gray-900">Project Name</span>
+                  <span className="ml-[10px] text-[11px] font-bold text-[#e14f4f] uppercase tracking-wider">Required</span>
                 </label>
                 <input
                   id="modal-project-name"
                   type="text"
-                  placeholder="Project name"
+                  placeholder="My project"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] outline-none"
+                  className="w-full px-4 py-3 text-[15px] border-[1.5px] border-[#149b82] rounded-[10px] focus:outline-none focus:ring-[1.5px] focus:ring-[#149b82] placeholder-gray-400 text-gray-800"
                 />
               </div>
               <div>
-                <label htmlFor="modal-project-description" className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
+                <label htmlFor="modal-project-description" className="flex items-center text-[15px] mb-2">
+                  <span className="font-bold text-gray-900">Description</span>
+                  <span className="ml-[10px] px-2.5 py-[3px] rounded-full bg-[#f1f5f9] text-[10px] font-bold text-slate-500 uppercase tracking-wider">Optional</span>
                 </label>
                 <textarea
                   id="modal-project-description"
-                  placeholder="Description"
-                  rows={4}
+                  placeholder="What is this project about?"
+                  rows={3}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] outline-none resize-y"
+                  className="w-full px-4 py-3 text-[15px] bg-white border-[1.5px] border-[#e2e8f0] rounded-[10px] focus:outline-none focus:border-[#149b82] resize-none placeholder-gray-400 text-gray-800 transition-colors"
                 />
               </div>
             </div>
-            <div className="mt-6 flex gap-3 justify-end">
+
+            <div className="px-6 pb-6 pt-2 flex gap-3 justify-center items-center">
               <button
                 type="button"
                 onClick={handleCancelModal}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-[15px] text-white bg-[#dc3545] rounded-xl hover:bg-[#c82333] font-bold shadow-[0_4px_12px_rgba(220,53,69,0.35)] transition-all"
               >
+                <svg className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={modalPrimaryAction}
                 disabled={!formName.trim()}
-                className="px-4 py-2 bg-[#0D9488] text-white rounded-lg font-medium hover:bg-[#0F766E] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-2 px-6 py-2.5 text-[15px] rounded-xl font-bold transition-all disabled:bg-[#f1f5f9] disabled:text-[#94a3b8] disabled:border border-transparent disabled:border-[#e2e8f0] bg-[#149b82] text-white hover:bg-[#11846f] disabled:cursor-not-allowed shadow-sm disabled:shadow-none"
               >
-                {modalPrimaryLabel}
+                <svg className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{modalTitle === 'Edit project' ? 'Save changes' : 'Create project'}</span>
               </button>
             </div>
           </div>

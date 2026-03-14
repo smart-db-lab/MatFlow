@@ -86,11 +86,11 @@ function DatasetGroup({ csvData }) {
 
   return (
     <div>
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Group Data</h1>
-            <p className="text-sm text-gray-500">Group columns and apply aggregation</p>
+            <h2 className="text-base font-semibold text-gray-900">Group Analysis</h2>
+            <p className="mt-0.5 text-xs text-gray-500">Group columns and apply aggregation</p>
           </div>
           <button
             type="button"
@@ -149,7 +149,7 @@ function DatasetGroup({ csvData }) {
         )}
       </div>
 
-      <div className="ag-theme-alpine mt-4 h-[600px] w-full rounded-xl border border-gray-200 bg-white p-2">
+      <div className="mt-4 w-full rounded-xl border border-gray-200 bg-white p-2">
         {rowData && columnDefs && (
           <AgGridComponent rowData={rowData} columnDefs={columnDefs} />
         )}

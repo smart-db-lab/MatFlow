@@ -1,8 +1,9 @@
-import { Input, Radio } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { setData } from "../../../../../Slices/FeatureEngineeringSlice";
-import SingleDropDown from "../../../../Components/SingleDropDown/SingleDropDown";
+import FormControl from "@mui/material/FormControl";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
 
 function Add_NewColumn({
   csvData,
@@ -44,42 +45,71 @@ function Add_NewColumn({
 
   return (
     <div className="w-full">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6">
+      <div className="flex items-center gap-4 flex-nowrap overflow-x-auto">
         <div className="flex-shrink-0">
-          <Radio.Group
-            orientation="horizontal"
-            label="Select Methods"
-            value={select_methods}
-            onChange={(e) => setMethod(e)}
-          >
-            <Radio value="Input String" color="success">
+          <div className="flex items-center gap-4">
+            <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-900">
+              <input
+                type="radio"
+                name="new-column-method"
+                value="Input String"
+                checked={select_methods === "Input String"}
+                onChange={(e) => setMethod(e.target.value)}
+                className="h-4 w-4 text-[#0D9488] focus:ring-[#0D9488]"
+              />
               Input String
-            </Radio>
-            <Radio value="Copy Another Field" color="success">
+            </label>
+            <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-900">
+              <input
+                type="radio"
+                name="new-column-method"
+                value="Copy Another Field"
+                checked={select_methods === "Copy Another Field"}
+                onChange={(e) => setMethod(e.target.value)}
+                className="h-4 w-4 text-[#0D9488] focus:ring-[#0D9488]"
+              />
               Copy Another Field
-            </Radio>
-          </Radio.Group>
+            </label>
+          </div>
         </div>
-        <div className="flex-1 w-full lg:w-auto">
+        <div className="flex-shrink-0">
           {select_methods === "Input String" ? (
-            <div className="w-full max-w-md">
-              <Input
-                label="Input String"
-                fullWidth
-                clearable
+            <div className="w-[280px]">
+              <input
+                type="text"
                 value={input_string}
                 onChange={(e) => setInputString(e.target.value)}
-                size="sm"
+                className="w-full px-2.5 py-2 text-sm border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] transition-all"
+                placeholder="Input String"
               />
             </div>
           ) : (
-            <div>
-              <p className="text-sm font-semibold text-gray-900 mb-1.5">Select Field</p>
-              <SingleDropDown
-                columnNames={columnNames}
-                onValueChange={setSelectField}
-                initValue={select_field}
-              />
+            <div className="w-[260px]">
+              <FormControl fullWidth size="small">
+                <Select
+                  value={select_field}
+                  onChange={(e) => setSelectField(e.target.value)}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: { maxHeight: 260 },
+                    },
+                    anchorOrigin: { vertical: "bottom", horizontal: "left" },
+                    transformOrigin: { vertical: "top", horizontal: "left" },
+                  }}
+                  sx={{
+                    "& .MuiSelect-select": {
+                      py: "9px",
+                      fontSize: "0.875rem",
+                    },
+                  }}
+                >
+                  {columnNames.map((column) => (
+                    <MenuItem key={column} value={column}>
+                      {column}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </div>
           )}
         </div>

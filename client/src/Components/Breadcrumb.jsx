@@ -7,24 +7,24 @@ import { useNavigate } from 'react-router-dom';
 const functionTreeData = [
   {
     id: '0',
-    label: 'Dataset',
+    label: 'Explore Dataset',
     children: [
-      { id: '0-0', label: 'Display' },
-      { id: '0-1', label: 'Information' },
-      { id: '0-2', label: 'Statistics' },
-      { id: '0-3', label: 'Corelation' },
-      { id: '0-4', label: 'Duplicate' },
-      { id: '0-5', label: 'Group' },
+      { id: '0-0', label: 'Materials Property Preview' },
+      { id: '0-1', label: 'Materials Data Profile' },
+      { id: '0-2', label: 'Materials Property Summary' },
+      { id: '0-3', label: 'Structure-Property Analysis' },
+      { id: '0-4', label: 'Duplicate Materials Detection' },
+      { id: '0-5', label: 'Group Analysis' },
     ],
   },
   {
     id: '1',
-    label: 'EDA',
+    label: 'Visual Data Analysis',
     children: [],
   },
   {
     id: '2',
-    label: 'Feature Engineering',
+    label: 'Materials Descriptor Generation',
     children: [
       { id: '2-0', label: 'Add/Modify' },
       { id: '2-1', label: 'Change Dtype' },
@@ -43,7 +43,7 @@ const functionTreeData = [
   },
   {
     id: '3',
-    label: 'Final Dataset',
+    label: 'Model-Ready Dataset',
     children: [],
   },
   {
@@ -53,11 +53,11 @@ const functionTreeData = [
   },
   {
     id: '5',
-    label: 'ForwardML',
+    label: 'Computational ML Model',
     children: [
       {
         id: '5-0',
-        label: 'Model Building',
+        label: 'Generate Predictive Model',
         children: [
           { id: '5-0-0', label: 'Split Dataset' },
           { id: '5-0-1', label: 'Build Model' },
@@ -66,7 +66,7 @@ const functionTreeData = [
           { id: '5-0-4', label: 'Models' },
         ],
       },
-      { id: '5-1', label: 'Model Deployment' },
+      { id: '5-1', label: 'Materials Property Prediction' },
       { id: '5-2', label: 'Time Series Analysis' },
     ],
   },
@@ -84,6 +84,26 @@ const functionTreeData = [
     ],
   },
 ];
+
+const DATASET_LABEL_MAP = {
+  Display: 'Materials Property Preview',
+  Dataset: 'Materials Property Preview',
+  'Explore Dataset': 'Materials Property Preview',
+  EDA: 'Visual Data Analysis',
+  'Exploratory Data Analysis': 'Visual Data Analysis',
+  'Feature Engineering': 'Materials Descriptor Generation',
+  'Data Prep': 'Materials Descriptor Generation',
+  'Final Dataset': 'Model-Ready Dataset',
+  Information: 'Materials Data Profil',
+  Statistics: 'Materials Property Summary',
+  Corelation: 'Structure-Property Analysis',
+  Correlation: 'Structure-Property Analysis',
+  Duplicate: 'Duplicate Materials Detection',
+  'Model Building': 'Generate Predictive Model',
+  'Model Deployment': 'Materials Property Prediction',
+  ForwardML: 'Computational ML Model',
+  Group: 'Group Analysis',
+};
 
 // Helper function to find all parent categories for a function (returns array from top to bottom)
 const findAllParentCategories = (functionLabel) => {
@@ -120,7 +140,7 @@ function Breadcrumb({ projectName }) {
   breadcrumbItems.push({
     label: 'Home',
     isActive: false,
-    onClick: () => navigate('/dashboard'),
+    onClick: () => navigate('/matflow/dashboard'),
   });
 
   // Add project name if available (replaces generic "File" with project context)
@@ -133,7 +153,8 @@ function Breadcrumb({ projectName }) {
 
   // Find and add all parent categories if function exists
   if (activeFunction) {
-    const parentCategories = findAllParentCategories(activeFunction);
+    const normalizedFunctionLabel = DATASET_LABEL_MAP[activeFunction] || activeFunction;
+    const parentCategories = findAllParentCategories(normalizedFunctionLabel);
     if (parentCategories && parentCategories.length > 0) {
       // Add all parent categories in order
       parentCategories.forEach((parentLabel) => {
@@ -146,7 +167,7 @@ function Breadcrumb({ projectName }) {
     
     // Add active function as the last item (current page)
     breadcrumbItems.push({
-      label: activeFunction,
+      label: normalizedFunctionLabel,
       isActive: true,
     });
   }
@@ -157,7 +178,7 @@ function Breadcrumb({ projectName }) {
   }
 
   const handleHomeClick = () => {
-    navigate('/dashboard');
+    navigate('/matflow/dashboard');
   };
 
   return (

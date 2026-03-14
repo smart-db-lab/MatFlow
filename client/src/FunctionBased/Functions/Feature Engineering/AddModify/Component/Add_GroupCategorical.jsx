@@ -1,9 +1,10 @@
-import { Checkbox, Input } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { setData } from "../../../../../Slices/FeatureEngineeringSlice";
-import MultipleDropDown from "../../../../Components/MultipleDropDown/MultipleDropDown";
-import SingleDropDown from "../../../../Components/SingleDropDown/SingleDropDown";
+import TextField from "@mui/material/TextField";
+import Autocomplete from "@mui/material/Autocomplete";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 
 function Add_GroupCategorical({
   csvData,
@@ -112,11 +113,11 @@ function Add_GroupCategorical({
       <div className={`flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6 mb-4 ${type === "node" && "flex-col"}`}>
         <div className={`flex flex-col sm:flex-row items-start sm:items-center w-full gap-4 flex-1`}>
           <div className="w-full sm:w-auto sm:min-w-[120px]">
-            <Input
-              label="N Groups"
+            <TextField
+              label="Group Count"
               value={nGroups}
               onChange={(e) => {
-                const val = e.target.value;
+                const val = Number(e.target.value || 0);
                 setNGroups(val);
                 if (val < nGroupData.length)
                   setNGroupData(nGroupData.slice(0, val));
@@ -133,34 +134,44 @@ function Add_GroupCategorical({
                 }
               }}
               type="number"
+              size="small"
+              inputProps={{ step: 1, min: 1 }}
             />
           </div>
           <div className="flex-grow w-full sm:w-auto">
-            <p className="text-sm font-medium text-gray-700 mb-1.5">Group Column</p>
-            <SingleDropDown
-              columnNames={columnNames}
-              onValueChange={setGroupColumn}
-              initValue={groupColumn}
+            <p className="text-sm font-semibold text-gray-800 mb-1.5">Group Column</p>
+            <Autocomplete
+              size="small"
+              options={columnNames}
+              value={groupColumn || null}
+              onChange={(_, val) => setGroupColumn(val || "")}
+              renderInput={(params) => (
+                <TextField {...params} placeholder="Select numeric column" />
+              )}
             />
           </div>
         </div>
         <div className={`flex flex-row gap-4 ${type === "node" ? "" : ""}`}>
-          <Checkbox
-            key={`sort-value-${sort_value}`}
-            defaultSelected={sort_value}
-            color="primary"
-            onChange={(e) => setSort_value(e.valueOf())}
-          >
-            Sort Value
-          </Checkbox>
-          <Checkbox
-            key={`show-group-${show_group}`}
-            color="primary"
-            defaultSelected={show_group}
-            onChange={(e) => setShow_group(e.valueOf())}
-          >
-            Show Group
-          </Checkbox>
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={sort_value}
+                onChange={(e) => setSort_value(e.target.checked)}
+              />
+            }
+            label={<span className="text-sm font-medium">Sort Value</span>}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={show_group}
+                onChange={(e) => setShow_group(e.target.checked)}
+              />
+            }
+            label={<span className="text-sm font-medium">Show Group</span>}
+          />
         </div>
       </div>
       <div className="mt-4">
@@ -168,34 +179,40 @@ function Add_GroupCategorical({
           return (
             <div key={index} className="flex flex-col sm:flex-row gap-4 mt-4 items-start sm:items-center">
               <div className="w-full sm:w-auto sm:min-w-[200px]">
-                <Input
-                  label="Group Name"
+                <TextField
+                  label={`Group ${index + 1} Name`}
+                  size="small"
                   fullWidth
                   value={nGroupData[index].group_name}
                   onChange={(e) => handleChange(e, index)}
                 />
               </div>
               <div className="flex-grow w-full sm:w-auto sm:min-w-[400px] sm:max-w-[700px]">
-                <p className="text-sm font-medium text-gray-700 mb-1.5">Group Members</p>
-                <MultipleDropDown
-                  columnNames={groupMembers || []}
-                  setSelectedColumns={handleMultipleDropdown}
-                  curInd={index}
+                <p className="text-sm font-semibold text-gray-800 mb-1.5">Group Members</p>
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={groupMembers || []}
                   disabled={nGroupData[index].others}
-                  defaultValue={nGroupData[index].group_members}
+                  value={nGroupData[index].group_members || []}
+                  onChange={(_, selected) => handleMultipleDropdown(selected, index)}
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder="Select group members" />
+                  )}
                 />
               </div>
               {index === nGroups - 1 && (
                 <div className="flex-shrink-0">
-                  <Checkbox
-                    key={`others-${index}-${nGroupData[index].others}`}
-                    defaultSelected={nGroupData[index].others}
-                    size={type === "node" ? "sm" : "md"}
-                    color="primary"
-                    onChange={(e) => handleOtherChange(e.valueOf(), index)}
-                  >
-                    Others
-                  </Checkbox>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={Boolean(nGroupData[index].others)}
+                        onChange={(e) => handleOtherChange(e.target.checked, index)}
+                      />
+                    }
+                    label={<span className="text-sm font-medium">Others</span>}
+                  />
                 </div>
               )}
             </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { isAdminLoggedIn, logout, checkAdminStatus, getAuthHeaders } from "../util/adminAuth";
 import { commonApi, serviceAdminApi } from "../services/api/apiService";
@@ -67,7 +67,7 @@ import {
   FilePlus,
   HelpCircle,
   LogOut,
-  Home,
+  ArrowLeft,
   Pencil,
   Trash2,
   Building2,
@@ -282,6 +282,7 @@ function FileUploadField({ id, label, onChange, inputRef, required, helperText }
 
 function AdminDashboard({ serviceKey = "mlflow", title = "Admin Dashboard" }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMlflow = serviceKey === "mlflow";
   const enableArticles = isMlflow;
   const enableServices = isMlflow;
@@ -336,6 +337,13 @@ function AdminDashboard({ serviceKey = "mlflow", title = "Admin Dashboard" }) {
   const [showAddFAQModal, setShowAddFAQModal] = useState(false);
   const [editingFAQ, setEditingFAQ] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const settingsOrigin = location.state?.fromSettingsOrigin;
+
+  const getHomeDestination = () => {
+    if (serviceKey !== "matflow") return "/";
+    if (settingsOrigin === "landing") return "/matflow";
+    return "/matflow/dashboard";
+  };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -2176,8 +2184,8 @@ function AdminDashboard({ serviceKey = "mlflow", title = "Admin Dashboard" }) {
             </Typography>
             <Button
               variant="text"
-              onClick={() => navigate(serviceKey === "matflow" ? "/dashboard" : "/")}
-              startIcon={<Home size={18} strokeWidth={2} />}
+              onClick={() => navigate(getHomeDestination())}
+              startIcon={<ArrowLeft size={18} strokeWidth={2} />}
               sx={{ 
                 color: '#64748b',
                 fontWeight: 500,
@@ -2187,7 +2195,7 @@ function AdminDashboard({ serviceKey = "mlflow", title = "Admin Dashboard" }) {
                 '&:hover': { bgcolor: '#f1f5f9', color: '#0D9488' },
               }}
             >
-              Home
+              Go back
             </Button>
           </Toolbar>
         </AppBar>

@@ -1046,14 +1046,14 @@ function SMILESMolecularStructure({ csvData }) {
                           Generated Structure:
                         </Typography>
                         <div
-                          className="flex items-center justify-center bg-white rounded-md border border-gray-200"
+                          className="flex items-center justify-center bg-white rounded-md"
                           style={{ width: imageSize + 40, height: imageSize + 40 }}
                         >
                           <img
                             src={results.image_url}
                             alt="Molecular Structure"
                             style={{ width: imageSize, height: imageSize }}
-                            className="border border-gray-200 rounded-md"
+                            className="rounded-md"
                           />
                         </div>
                         <button

@@ -1,14 +1,23 @@
-import { Input, Progress, Radio } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import Plot from "react-plotly.js";
 import { useSelector } from "react-redux";
 import AgGridAutoDataComponent from "../../../../Components/AgGridComponent/AgGridAutoDataComponent";
 import { toast } from "react-toastify";
 import { apiService } from "../../../../../services/api/apiService";
+import TextField from "@mui/material/TextField";
+import LinearProgress from "@mui/material/LinearProgress";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
+import FormControlLabel from "@mui/material/FormControlLabel";
 
-function BestOverallFeature({ csvData }) {
-  const [k_fold, setKFoldValue] = useState(2);
-  const [method, setMethod] = useState("None");
+function BestOverallFeature({
+  csvData,
+  externalKFold = undefined,
+  externalMethod = undefined,
+  hideControls = false,
+}) {
+  const [k_fold, setKFoldValue] = useState(externalKFold ?? 2);
+  const [method, setMethod] = useState(externalMethod ?? "None");
   const selectionMethod = useSelector((state) => state.featureSelection.method);
   const target_var = useSelector(
     (state) => state.featureSelection.target_variable
@@ -34,15 +43,29 @@ function BestOverallFeature({ csvData }) {
     }
   }, [loading]);
 
-  const handleMethod = async (e) => {
-    setMethod(e);
-    if (e === "None") {
+  useEffect(() => {
+    if (externalKFold !== undefined) {
+      setKFoldValue(externalKFold);
+    }
+  }, [externalKFold]);
+
+  useEffect(() => {
+    if (externalMethod !== undefined) {
+      setMethod(externalMethod);
+    }
+  }, [externalMethod]);
+
+  const runBestOverall = async () => {
+    if (method === "None") {
       setSelectedFeatureData();
       setDroppedFeatureData();
       setGraphData();
       setProgress(0);
       setData();
-    } else if (e === "All") {
+      return;
+    }
+
+    if (method === "All") {
       setLoading(true);
       const Data = await apiService.matflow.featureEngineering.featureSelection({
         method: selectionMethod,
@@ -133,46 +156,44 @@ function BestOverallFeature({ csvData }) {
   };
 
   useEffect(() => {
+    runBestOverall();
+  }, [method, k_fold, selectionMethod, target_var]);
+
+  useEffect(() => {
     console.log(data);
   }, [data]);
 
   return (
     <div className="mt-4">
-      <div>
-        <Input
-          label="Enter the value for k-fold"
-          fullWidth
-          type="number"
-          step={1}
-          value={k_fold}
-          onChange={(e) => setKFoldValue(e.target.value)}
-        />
-      </div>
-      <div className="mt-4">
-        <Radio.Group
-          defaultValue={method}
-          onChange={handleMethod}
-          orientation="horizontal"
-        >
-          <Radio value="All" color="success">
-            All
-          </Radio>
-          <Radio value="Custom" color="success">
-            Custom
-          </Radio>
-          <Radio value="None" color="success">
-            None
-          </Radio>
-        </Radio.Group>
-      </div>
+      {!hideControls && (
+        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+          <div className="w-full sm:w-auto sm:min-w-[220px] sm:max-w-[320px]">
+            <TextField
+              label="Enter the value for k-fold"
+              fullWidth
+              type="number"
+              size="small"
+              inputProps={{ step: 1 }}
+              value={k_fold}
+              onChange={(e) => setKFoldValue(e.target.value)}
+            />
+          </div>
+          <RadioGroup
+            row
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+          >
+            <FormControlLabel value="All" control={<Radio size="small" />} label="All" />
+            <FormControlLabel value="Custom" control={<Radio size="small" />} label="Custom" />
+            <FormControlLabel value="None" control={<Radio size="small" />} label="None" />
+          </RadioGroup>
+        </div>
+      )}
       {loading && (
         <div className="mt-6">
-          <Progress
+          <LinearProgress
             value={progress}
-            shadow
-            color="success"
-            status="secondary"
-            striped
+            variant="determinate"
           />
         </div>
       )}
@@ -181,7 +202,7 @@ function BestOverallFeature({ csvData }) {
           {data.selected_feature_data && (
             <div className="mt-8 grid grid-cols-2 gap-8">
               <div>
-                <h1 className="text-2xl mb-2 font-medium">
+                <h1 className="text-lg mb-2 font-semibold">
                   Selected Features:
                 </h1>
                 <AgGridAutoDataComponent
@@ -194,7 +215,7 @@ function BestOverallFeature({ csvData }) {
                 />
               </div>
               <div>
-                <h1 className="text-2xl mb-2 font-medium">Dropped Features:</h1>
+                <h1 className="text-lg mb-2 font-semibold">Dropped Features:</h1>
                 <AgGridAutoDataComponent
                   download={true}
                   rowData={data.dropped_feature_data}
@@ -209,7 +230,7 @@ function BestOverallFeature({ csvData }) {
           {data.single_selected && (
             <div className="mt-8 grid grid-cols-2 gap-8">
               <div>
-                <h1 className="text-2xl mb-2 font-medium">
+                <h1 className="text-lg mb-2 font-semibold">
                   Selected Features:
                 </h1>
                 <AgGridAutoDataComponent
@@ -222,7 +243,7 @@ function BestOverallFeature({ csvData }) {
                 />
               </div>
               <div>
-                <h1 className="text-2xl mb-2 font-medium">Dropped Features:</h1>
+                <h1 className="text-lg mb-2 font-semibold">Dropped Features:</h1>
                 <AgGridAutoDataComponent
                   download={true}
                   rowData={data.single_dropped}

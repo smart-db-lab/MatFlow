@@ -51,15 +51,15 @@ const DatasetInformation = ({ csvData }) => {
 
   return (
     <div>
-      <div className="my-4 flex items-center rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Dataset Information
+      <div className="mb-3">
+        <h2 className="text-base font-semibold text-gray-900">
+          Materials Data Profile
           {isDataCleared && (
-            <span className="ml-2 text-sm text-green-600">
+            <span className="ml-2 text-xs text-green-600">
               ✅ Cache cleared
             </span>
           )}
-        </h1>
+        </h2>
       </div>
       {csvData && csvData.length > 0 && (
         <MyAgGridComponent rowData={csvData} key={activeCsvFile} />

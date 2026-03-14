@@ -1,9 +1,17 @@
-import { Loading } from '@nextui-org/react';
+import CircularProgress from '@mui/material/CircularProgress';
+import TextField from '@mui/material/TextField';
+import FormControl from '@mui/material/FormControl';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import LayoutSelector from '../../Components/LayoutSelector/LayoutSelector';
 import { isLoggedIn } from '../../../util/adminAuth';
 import { apiService } from '../../../services/api/apiService';
+import {
+  FE_LABEL_CLASS,
+  FE_SECTION_TITLE_CLASS,
+} from '../Feature Engineering/feUi';
 
 function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onLoading }) {
   const activeCsvFile = useSelector((state) => state.uploadedFile.activeFile);
@@ -33,7 +41,7 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [plotlyData, setPlotlyData] = useState([]);
+  const [echartsData, setEchartsData] = useState([]);
   const [statistics, setStatistics] = useState(null);
 
   useEffect(() => {
@@ -72,7 +80,7 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
 
     setLoading(true);
     setError('');
-    setPlotlyData([]);
+    setEchartsData([]);
     setStatistics(null);
     
     if (onLoading && splitMode) {
@@ -95,11 +103,11 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
       const data = await apiService.matflow.eda.vennDiagram(payload);
       console.log('API Response:', data);
       
-      let plotData = data.plotly || [];
+      let plotData = data.echarts || [];
       // Ensure it's an array
       plotData = Array.isArray(plotData) ? plotData : (typeof plotData === "object" ? [plotData] : []);
       
-      setPlotlyData(plotData);
+      setEchartsData(plotData);
       setStatistics(data.statistics || null);
       
       if (onPlotGenerated && splitMode) {
@@ -124,7 +132,7 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
     <div className="w-full">
       {/* Feature Groups Configuration */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 tracking-wide">
+        <h3 className={FE_SECTION_TITLE_CLASS}>
           Feature Groups Configuration
         </h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -140,69 +148,104 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
               <div className="space-y-3">
                 {/* Pattern */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  <label className={FE_LABEL_CLASS}>
                     Column Pattern
                   </label>
-                  <input
-                    type="text"
+                  <TextField
+                    fullWidth
+                    size="small"
                     value={group.pattern}
                     onChange={(e) =>
                       updateFeatureGroup(index, 'pattern', e.target.value)
                     }
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] outline-none transition-colors"
                     placeholder="e.g., Bond Chain"
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "10px",
+                        backgroundColor: "#fcfcfd",
+                        "& fieldset": { borderColor: "#d1d5db" },
+                        "&:hover fieldset": { borderColor: "#9ca3af" },
+                        "&.Mui-focused fieldset": { borderColor: "#0D9488", borderWidth: "2px" },
+                      },
+                    }}
                   />
                 </div>
 
                 {/* Method */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  <label className={FE_LABEL_CLASS}>
                     Matching Method
                   </label>
-                  <select
-                    value={group.method}
-                    onChange={(e) =>
-                      updateFeatureGroup(index, 'method', e.target.value)
-                    }
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] outline-none transition-colors bg-white"
-                  >
-                    <option value="starts_with">Starts with</option>
-                    <option value="ends_with">Ends with</option>
-                    <option value="contains">Contains</option>
-                    <option value="exact_match">Exact match</option>
-                  </select>
+                  <FormControl fullWidth size="small">
+                    <Select
+                      value={group.method}
+                      onChange={(e) =>
+                        updateFeatureGroup(index, 'method', e.target.value)
+                      }
+                      sx={{
+                        borderRadius: "10px",
+                        backgroundColor: "#fcfcfd",
+                        ".MuiOutlinedInput-notchedOutline": { borderColor: "#d1d5db" },
+                        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#9ca3af" },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#0D9488", borderWidth: "2px" },
+                      }}
+                    >
+                      <MenuItem value="starts_with">Starts with</MenuItem>
+                      <MenuItem value="ends_with">Ends with</MenuItem>
+                      <MenuItem value="contains">Contains</MenuItem>
+                      <MenuItem value="exact_match">Exact match</MenuItem>
+                    </Select>
+                  </FormControl>
                 </div>
 
                 {/* Short Name */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  <label className={FE_LABEL_CLASS}>
                     Short Name (for diagram)
                   </label>
-                  <input
-                    type="text"
+                  <TextField
+                    fullWidth
+                    size="small"
                     value={group.shortName}
                     onChange={(e) =>
                       updateFeatureGroup(index, 'shortName', e.target.value)
                     }
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] outline-none transition-colors"
                     placeholder="e.g., C"
-                    maxLength={3}
+                    inputProps={{ maxLength: 3 }}
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "10px",
+                        backgroundColor: "#fcfcfd",
+                        "& fieldset": { borderColor: "#d1d5db" },
+                        "&:hover fieldset": { borderColor: "#9ca3af" },
+                        "&.Mui-focused fieldset": { borderColor: "#0D9488", borderWidth: "2px" },
+                      },
+                    }}
                   />
                 </div>
 
                 {/* Display Name */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                  <label className={FE_LABEL_CLASS}>
                     Display Name (for legend)
                   </label>
-                  <input
-                    type="text"
+                  <TextField
+                    fullWidth
+                    size="small"
                     value={group.displayName}
                     onChange={(e) =>
                       updateFeatureGroup(index, 'displayName', e.target.value)
                     }
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0D9488] focus:border-[#0D9488] outline-none transition-colors"
                     placeholder="e.g., Bond Chain Related Features"
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        borderRadius: "10px",
+                        backgroundColor: "#fcfcfd",
+                        "& fieldset": { borderColor: "#d1d5db" },
+                        "&:hover fieldset": { borderColor: "#9ca3af" },
+                        "&.Mui-focused fieldset": { borderColor: "#0D9488", borderWidth: "2px" },
+                      },
+                    }}
                   />
                 </div>
               </div>
@@ -225,18 +268,18 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
       {/* Statistics */}
       {statistics && (
         <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h3 className="text-base font-semibold text-gray-800 mb-3">
+          <h3 className="text-base font-semibold text-gray-900 mb-3">
             Feature Analysis Statistics
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white p-3 rounded border border-gray-200">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">
                 Total Features: <span className="text-[#0D9488]">{statistics.total_features}</span>
               </h4>
               <ul className="space-y-1.5">
                 {Object.entries(statistics.feature_counts).map(
                   ([key, value]) => (
-                    <li key={key} className="text-xs text-gray-600 flex justify-between">
+                    <li key={key} className="text-sm text-gray-600 flex justify-between">
                       <span>{key}:</span>
                       <span className="font-medium">{value} features</span>
                     </li>
@@ -245,10 +288,10 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
               </ul>
             </div>
             <div className="bg-white p-3 rounded border border-gray-200">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Overlaps:</h4>
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Overlaps:</h4>
               <ul className="space-y-1.5">
                 {Object.entries(statistics.overlaps).map(([key, value]) => (
-                  <li key={key} className="text-xs text-gray-600 flex justify-between">
+                  <li key={key} className="text-sm text-gray-600 flex justify-between">
                     <span>{key}:</span>
                     <span className="font-medium">{value} features</span>
                   </li>
@@ -269,16 +312,17 @@ function VennDiagram({ csvData, splitMode = false, onPlotGenerated, onError, onL
       {/* Loader */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <Loading color="primary" size="xl">
-            Generating Venn Diagram...
-          </Loading>
+          <div className="flex flex-col items-center gap-2">
+            <CircularProgress size={36} sx={{ color: "#0D9488" }} />
+            <p className="text-sm text-gray-600">Generating Venn Diagram...</p>
+          </div>
         </div>
       )}
 
       {/* Output */}
-      {!loading && plotlyData.length > 0 && (
+      {!loading && echartsData.length > 0 && (
         <div className="w-full">
-          <LayoutSelector plotlyData={plotlyData} />
+          <LayoutSelector echartsData={echartsData} />
         </div>
       )}
     </div>

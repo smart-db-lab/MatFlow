@@ -1,4 +1,4 @@
-import { Checkbox, Input, Loading } from "@nextui-org/react";
+import CircularProgress from "@mui/material/CircularProgress";
 import React, { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import SingleDropDown from "../../Components/SingleDropDown/SingleDropDown";
@@ -11,7 +11,7 @@ function CountPlot({ csvData }) {
   const plotRef = useRef(null); // Reference to the plot (if needed)
   const activeCsvFile = useSelector((state) => state.uploadedFile.activeFile);
 
-  const [plotlyData, setPlotlyData] = useState([]); // Initialize as an array
+  const [echartsData, setEchartsData] = useState([]); // Initialize as an array
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null); // State for error handling
 
@@ -19,12 +19,11 @@ function CountPlot({ csvData }) {
   const [activeStringColumn, setActiveStringColumn] = useState([]); // Categorical variables
   const [activeHueColumn, setActiveHueColumn] = useState("");
   const [orientation, setOrientation] = useState("Vertical");
-  const [annotate, setAnnotate] = useState(false);
 
   // Listen for chatbot-generated count plot requests
   useEffect(() => {
     const handleChatbotCountPlot = (event) => {
-      const { categorical, hue, orientation, annotate: chatbotAnnotate, title } = event.detail;
+      const { categorical, hue, orientation, title } = event.detail;
       console.log('🤖 Chatbot triggered count plot generation with params:', event.detail);
 
       // Validate parameters before setting state
@@ -37,9 +36,8 @@ function CountPlot({ csvData }) {
       setActiveStringColumn(categorical || []);
       setActiveHueColumn(hue || "");
       setOrientation(orientation || "Vertical");
-      setAnnotate(chatbotAnnotate || false);
 
-      generatePlotWithParams(categorical, hue, orientation, chatbotAnnotate, title);
+      generatePlotWithParams(categorical, hue, orientation, title);
     };
 
     window.addEventListener('chatbotGenerateCountPlot', handleChatbotCountPlot);
@@ -49,23 +47,22 @@ function CountPlot({ csvData }) {
   }, [csvData]);
 
   // Generate plot with direct parameters (for chatbot)
-  const generatePlotWithParams = async (categorical, hue, orientation, annotate, title) => {
+  const generatePlotWithParams = async (categorical, hue, orientation, title) => {
     try {
       setLoading(true);
-      setPlotlyData([]);
+      setEchartsData([]);
       setError(null);
 
       const data = await apiService.matflow.eda.countPlot({
         cat: categorical.length > 0 ? categorical : ["-"],
         hue: hue || "-",
         orient: orientation || "Vertical",
-        annote: annotate || false,
         title: title || "",
         file: csvData,
       });
       console.log(data);
-      const plotlyData = data.plotly || [];
-      setPlotlyData(Array.isArray(plotlyData) ? plotlyData : [plotlyData]);
+      const chartData = data.echarts || [];
+      setEchartsData(Array.isArray(chartData) ? chartData : [chartData]);
     } catch (error) {
       console.error("Error fetching Plotly data:", error);
       setError(error.message || "An unexpected error occurred.");
@@ -97,26 +94,25 @@ function CountPlot({ csvData }) {
   const handleGenerate = async () => {
     try {
       setLoading(true);
-      setPlotlyData([]);
+      setEchartsData([]);
       setError(null); // Reset error state
 
       const data = await apiService.matflow.eda.countPlot({
         cat: activeStringColumn.length > 0 ? activeStringColumn : ["-"], // Handle multiple categorical variables
         hue: activeHueColumn || "-",
         orient: orientation,
-        annotate: annotate, // Corrected parameter name
         title: "", // Remove local title; handled by LayoutSelector
         file: csvData,
       });
       console.log(data);
 
       // Ensure plotlyData is an array
-      if (Array.isArray(data.plotly)) {
-        setPlotlyData(data.plotly);
-      } else if (typeof data.plotly === "object") {
-        setPlotlyData([data.plotly]); // Wrap in array if single plot
+      if (Array.isArray(data.echarts)) {
+        setEchartsData(data.echarts);
+      } else if (typeof data.echarts === "object") {
+        setEchartsData([data.echarts]); // Wrap in array if single plot
       } else {
-        setPlotlyData([]); // Empty array if unexpected format
+        setEchartsData([]); // Empty array if unexpected format
       }
     } catch (error) {
       console.error("Error fetching Plotly data:", error);
@@ -148,26 +144,12 @@ function CountPlot({ csvData }) {
         </div>
         <div className="w-full">
           <p className="text-lg font-medium tracking-wide">Orientation</p>
-          <select
-            value={orientation}
-            className="bg-transparent p-2 focus:border-[#06603b] border-2 rounded-lg w-full"
-            onChange={(e) => setOrientation(e.target.value)}
-          >
-            <option value="Vertical">Vertical</option>
-            <option value="Horizontal">Horizontal</option>
-          </select>
+          <SingleDropDown
+            columnNames={["Vertical", "Horizontal"]}
+            initValue={orientation}
+            onValueChange={setOrientation}
+          />
         </div>
-      </div>
-
-      {/* Checkbox for Annotate */}
-      <div className="flex items-center gap-4 mt-4 tracking-wider">
-        <Checkbox
-          color="success"
-          isSelected={annotate}
-          onChange={(e) => setAnnotate(e.valueOf())}
-        >
-          Annotate
-        </Checkbox>
       </div>
 
       <div className="flex justify-end mt-4 my-12">
@@ -183,9 +165,10 @@ function CountPlot({ csvData }) {
       {/* Loading Indicator */}
       {loading && (
         <div className="grid place-content-center mt-12 w-full h-full">
-          <Loading color={"success"} size="xl">
-            Fetching Data...
-          </Loading>
+          <div className="flex flex-col items-center gap-2">
+            <CircularProgress size={36} sx={{ color: "#0D9488" }} />
+            <p className="text-sm text-gray-600">Fetching Data...</p>
+          </div>
         </div>
       )}
 
@@ -193,7 +176,7 @@ function CountPlot({ csvData }) {
       {error && <div className="mt-4 text-red-500 text-center">{error}</div>}
 
       {/* Render LayoutSelector with Plotly Data */}
-      {plotlyData.length > 0 && <LayoutSelector plotlyData={plotlyData} />}
+      {echartsData.length > 0 && <LayoutSelector echartsData={echartsData} />}
     </div>
   );
 }

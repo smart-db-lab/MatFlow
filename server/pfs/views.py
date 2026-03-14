@@ -19,8 +19,9 @@ from xgboost import XGBRegressor, XGBClassifier
 
 from dataset_manager.views import BASE_DATASET_DIR
 
-from .models import Project
-from .serializer import FeatureSelectionSerializer, ProjectSerializer
+from .models import Project as PfsProject
+from .serializer import FeatureSelectionSerializer, ProjectSerializer as PfsProjectSerializer
+from projects.models import Project as WorkspaceProject, Workspace
 
 SAMPLE_TYPE_TO_FOLDER = {
     "classification": "classification",
@@ -80,11 +81,11 @@ class ProjectListCreateAPIView(generics.ListCreateAPIView):
     List/create Matflow projects for the authenticated user.
     """
 
-    serializer_class = ProjectSerializer
+    serializer_class = PfsProjectSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Project.objects.filter(owner=self.request.user).order_by("-updated_at", "name")
+        return PfsProject.objects.filter(owner=self.request.user).order_by("-updated_at", "name")
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -95,12 +96,12 @@ class ProjectDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     Retrieve/update/delete a single project owned by the user.
     """
 
-    serializer_class = ProjectSerializer
+    serializer_class = PfsProjectSerializer
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = "id"
 
     def get_queryset(self):
-        return Project.objects.filter(owner=self.request.user)
+        return PfsProject.objects.filter(owner=self.request.user)
 
 
 class CreateSampleProjectAPIView(APIView):
@@ -110,6 +111,31 @@ class CreateSampleProjectAPIView(APIView):
 
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = (JSONParser,)
+
+    @staticmethod
+    def _resolve_unique_project_name(owner, base_name):
+        if not WorkspaceProject.objects.filter(owner=owner, name=base_name).exists():
+            return base_name
+        suffix = 2
+        while True:
+            candidate = f"{base_name} ({suffix})"
+            if not WorkspaceProject.objects.filter(owner=owner, name=candidate).exists():
+                return candidate
+            suffix += 1
+
+    @staticmethod
+    def _resolve_workspace_name(project, base_name):
+        existing = set(
+            Workspace.objects.filter(project=project).values_list("name", flat=True)
+        )
+        if base_name not in existing:
+            return base_name
+        suffix = 2
+        while True:
+            candidate = f"{base_name} ({suffix})"
+            if candidate not in existing:
+                return candidate
+            suffix += 1
 
     def post(self, request, format=None):
         sample_type = (request.data.get("sample_type") or "").strip().lower()
@@ -126,22 +152,52 @@ class CreateSampleProjectAPIView(APIView):
                 {"error": f"Sample dataset folder '{folder_name}' not found. Contact support."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        project = Project.objects.create(
+        sample_files = [
+            f for f in sorted(os.listdir(template_path))
+            if os.path.isfile(os.path.join(template_path, f))
+        ]
+        if not sample_files:
+            return Response(
+                {"error": f"No sample files found in '{folder_name}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        project_name = self._resolve_unique_project_name(
+            request.user,
+            f"Sample: {label}",
+        )
+        project = WorkspaceProject.objects.create(
             owner=request.user,
-            name=f"Sample: {label}",
+            name=project_name,
             description="Sample project for testing.",
         )
-        dest_path = os.path.join(BASE_DATASET_DIR, str(project.id))
-        os.makedirs(dest_path, exist_ok=True)
-        for name in os.listdir(template_path):
-            src = os.path.join(template_path, name)
-            dst = os.path.join(dest_path, name)
-            if os.path.isfile(src):
-                shutil.copy2(src, dst)
-            elif os.path.isdir(src):
-                shutil.copytree(src, dst)
-        serializer = ProjectSerializer(project)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        os.makedirs(project.base_dir, exist_ok=True)
+
+        for file_name in sample_files:
+            workspace_name = self._resolve_workspace_name(
+                project,
+                os.path.splitext(file_name)[0] or "sample_dataset",
+            )
+            workspace = Workspace.objects.create(
+                project=project,
+                name=workspace_name,
+                dataset_filename=file_name,
+            )
+            workspace.create_folder_structure()
+
+            src = os.path.join(template_path, file_name)
+            dst = os.path.join(workspace.base_dir, "original_dataset", file_name)
+            shutil.copy2(src, dst)
+
+        return Response(
+            {
+                "id": str(project.id),
+                "name": project.name,
+                "description": project.description,
+                "workspace_count": len(sample_files),
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class SeedGuestSampleAPIView(APIView):

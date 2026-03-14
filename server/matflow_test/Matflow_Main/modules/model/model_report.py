@@ -1,9 +1,33 @@
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.io as pio
-from django.http import HttpResponse
+import numpy as np
 from django.http import JsonResponse
-from eda.graph.plotly_theme import apply_modern_theme, MODERN_COLORS
+
+def convert_to_native_python(obj):
+    """Recursively convert numpy types to native Python types for JSON serialization"""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        val = float(obj)
+        if np.isnan(val):
+            return None
+        elif np.isinf(val):
+            return None
+        return val
+    elif isinstance(obj, float):
+        if np.isnan(obj):
+            return None
+        elif np.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_to_native_python(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_to_native_python(item) for item in obj]
+    return obj
 
 
 def model_report(file):
@@ -55,119 +79,193 @@ def report_graph(data, file):
 
     # Check if Radar chart is requested
     if orientation == "Radar":
-        return report_radar(column, model_names, data)
+        return report_radar(column, model_names, model_data)
 
-    # Create a Plotly figure
-    fig = go.Figure()
-
-    # Add traces for each model and metric
-    for i, col in enumerate(column.columns):
-        for j, (idx, row) in enumerate(data.iterrows()):
-            model_name = model_names[j] if j < len(model_names) else f"Model {j + 1}"
-
+    # Create ECharts bar chart
+    # Modern color palette
+    colors = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EF4444', '#14B8A6', '#F97316', '#6366F1']
+    
+    # Prepare series data for each model
+    series_data = []
+    for j, (idx, row) in enumerate(model_data.iterrows()):
+        model_name = model_names[j] if j < len(model_names) else f"Model {j + 1}"
+        values = []
+        for col in column.columns:
             try:
                 value = row[col] if col in row else None
             except:
                 value = None
+            # Only try to convert numeric values, skip non-numeric columns
+            if isinstance(value, str):
+                try:
+                    values.append(float(value))
+                except (ValueError, TypeError):
+                    values.append(0)
+            else:
+                values.append(float(value) if value is not None else 0)
+        
+        series_data.append({
+            "name": model_name,
+            "type": "bar",
+            "data": values,
+            "itemStyle": {"color": colors[j % len(colors)]},
+            "label": {
+                "show": False
+            }
+        })
+    
+    option = {
+        "backgroundColor": "#ffffff",
+        "title": {
+            "text": "Model Performance Comparison",
+            "left": "center",
+            "top": 12,
+            "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "textStyle": {"color": "#1f2937", "fontSize": 12},
+            "backgroundColor": "rgba(255,255,255,0.9)",
+            "borderColor": "#e5e7eb"
+        },
+        "legend": {
+            "orient": "horizontal",
+            "bottom": "0%",
+            "left": "center",
+            "textStyle": {"color": "#374151", "fontSize": 12}
+        },
+        "grid": {
+            "top": "15%",
+            "bottom": "12%",
+            "left": "8%",
+            "right": "4%",
+            "containLabel": True
+        },
+        "xAxis": {
+            "type": "category",
+            "data": [str(col) for col in column.columns],
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {"color": "#1f2937", "fontSize": 11, "rotate": -45 if orientation == "Vertical" else 0},
+            "splitLine": {"show": False}
+        } if orientation == "Vertical" else {
+            "type": "value",
+            "name": "Score",
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {"color": "#1f2937", "fontSize": 11},
+            "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+        },
+        "yAxis": {
+            "type": "value",
+            "name": "Score",
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {"color": "#1f2937", "fontSize": 11},
+            "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+        } if orientation == "Vertical" else {
+            "type": "category",
+            "data": [str(col) for col in column.columns],
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {"color": "#1f2937", "fontSize": 11},
+            "splitLine": {"show": False}
+        },
+        "series": series_data
+    }
+    
+    return JsonResponse({'data': None, 'layout': None, 'graph': [convert_to_native_python(option)]}, safe=False)
 
-            if value is not None:
-                color = MODERN_COLORS[j % len(MODERN_COLORS)]
-                bar_kwargs = dict(
-                    name=model_name,
-                    legendgroup=model_name,
-                    marker_color=color,
-                    marker_line=dict(width=0),
-                    showlegend=True if i == 0 else False,
-                    text=[f'{value:.3f}' if isinstance(value, (int, float)) else str(value)],
-                    textposition='outside',
-                    textfont=dict(size=10, color='#374151'),
-                )
-                if orientation == 'Vertical':
-                    fig.add_trace(go.Bar(x=[col], y=[value], **bar_kwargs))
-                else:
-                    fig.add_trace(go.Bar(y=[col], x=[value], orientation='h', **bar_kwargs))
 
-    fig.update_layout(
-        barmode='group',
-        bargap=0.2,
-        bargroupgap=0.08,
-    )
-
-    apply_modern_theme(fig, title='Model Performance Comparison')
-
-    fig.update_layout(
-        xaxis=dict(
-            title="Metrics" if orientation == 'Vertical' else "Score",
-            tickangle=-30 if orientation == 'Vertical' else 0,
-        ),
-        yaxis=dict(
-            title="Score" if orientation == 'Vertical' else "Metrics",
-            autorange=True,
-            tickmode='auto',
-            nticks=40,
-        ),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-    )
-
-    # Handle x-axis tick labels for better readability
-    if orientation == 'Vertical':
-        fig.update_xaxes(
-            tickangle=-45,
-            tickmode='array',
-            tickvals=list(column.columns),
-            ticktext=column.columns
-        )
-
-    graph_json = fig.to_json()
-    return JsonResponse(graph_json, safe=False)
-
-
-def report_radar(column, model_names, data):
-    """Generate a radar chart for model comparison."""
-    fig = go.Figure()
-
+def report_radar(column, model_names, model_data):
+    """Generate an ECharts radar chart for model comparison."""
+    # Modern color palette
+    colors = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EF4444', '#14B8A6', '#F97316', '#6366F1']
+    
     metrics = list(column.columns)
-    # Close the radar by repeating the first metric
-    theta = metrics + [metrics[0]]
-
-    for j, (idx, row) in enumerate(data.iterrows()):
+    
+    # Prepare series data for each model
+    series_data = []
+    for j, (idx, row) in enumerate(model_data.iterrows()):
         model_name = model_names[j] if j < len(model_names) else f"Model {j + 1}"
         values = []
         for col in metrics:
             try:
                 v = row[col] if col in row else 0
+                # Handle string values that might be numeric
+                if isinstance(v, str):
+                    try:
+                        v = float(v)
+                    except (ValueError, TypeError):
+                        v = 0
                 values.append(float(v) if v is not None else 0)
             except:
                 values.append(0)
-        # Close the polygon
-        values = values + [values[0]]
-
-        fig.add_trace(go.Scatterpolar(
-            r=values,
-            theta=theta,
-            fill='toself',
-            name=model_name,
-            line=dict(color=MODERN_COLORS[j % len(MODERN_COLORS)], width=2),
-            fillcolor=MODERN_COLORS[j % len(MODERN_COLORS)],
-            opacity=0.3,
-        ))
-
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 1.05],
-                tickfont=dict(size=11, color='#1f2937'),
-                gridcolor='rgba(0,0,0,0.06)',
-            ),
-            angularaxis=dict(
-                tickfont=dict(size=12, color='#1f2937'),
-                gridcolor='rgba(0,0,0,0.06)',
-            ),
-            bgcolor='#ffffff',
-        ),
-    )
-    apply_modern_theme(fig, title='Model Performance Radar')
-
-    graph_json = fig.to_json()
-    return JsonResponse(graph_json, safe=False)
+        
+        series_data.append({
+            "name": model_name,
+            "value": values,
+            "areaStyle": {
+                "opacity": 0.3
+            },
+            "lineStyle": {
+                "color": colors[j % len(colors)],
+                "width": 2
+            },
+            "itemStyle": {
+                "color": colors[j % len(colors)]
+            }
+        })
+    
+    option = {
+        "backgroundColor": "#ffffff",
+        "title": {
+            "text": "Model Performance Radar",
+            "left": "center",
+            "top": 12,
+            "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+        },
+        "tooltip": {
+            "trigger": "item",
+            "textStyle": {"color": "#1f2937", "fontSize": 12},
+            "backgroundColor": "rgba(255,255,255,0.9)",
+            "borderColor": "#e5e7eb"
+        },
+        "legend": {
+            "orient": "horizontal",
+            "bottom": "5%",
+            "left": "center",
+            "textStyle": {"color": "#374151", "fontSize": 12}
+        },
+        "radar": {
+            "indicator": [{"name": str(metric), "max": 1.05} for metric in metrics],
+            "shape": "polygon",
+            "splitNumber": 4,
+            "name": {
+                "textStyle": {
+                    "color": "#1f2937",
+                    "fontSize": 11
+                }
+            },
+            "splitLine": {
+                "lineStyle": {
+                    "color": ["rgba(0,0,0,0.06)", "rgba(0,0,0,0.06)", "rgba(0,0,0,0.06)", "rgba(0,0,0,0.06)"],
+                    "width": 1
+                }
+            },
+            "axisLine": {
+                "lineStyle": {
+                    "color": "#e5e7eb",
+                    "width": 1
+                }
+            },
+            "splitArea": {
+                "show": False
+            }
+        },
+        "series": [
+            {
+                "type": "radar",
+                "data": series_data
+            }
+        ]
+    }
+    
+    return JsonResponse({'data': None, 'layout': None, 'graph': [convert_to_native_python(option)]}, safe=False)

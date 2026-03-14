@@ -16,6 +16,16 @@ from ..tasks.structure import process_smiles_structure_batch
 from ..utils.structure import smiles_to_png
 
 
+def _normalize_image_size(raw_size, default=300):
+    try:
+        size = int(raw_size)
+    except (TypeError, ValueError):
+        size = default
+    if size <= 0:
+        size = default
+    return size
+
+
 class SmilesStructureZipDownloadView(APIView):
     permission_classes = [AllowAny]
     """
@@ -93,7 +103,7 @@ class SmilesStructureGenerateView(APIView):
         mode   = data.get("mode")
         config = data.get("config", {})
 
-        img_size    = config.get("image_size", 300)
+        img_size    = _normalize_image_size(config.get("image_size", 300))
         img_format  = config.get("image_format", "png").lower()
 
         if mode == "single":
@@ -103,7 +113,7 @@ class SmilesStructureGenerateView(APIView):
                     {"detail": "Field 'smiles' is required for single mode."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            img = smiles_to_png(smiles, img_size)
+            img = smiles_to_png(smiles, (img_size, img_size))
             if not img:
                 return Response(
                     {"detail": "Could not render structure."},

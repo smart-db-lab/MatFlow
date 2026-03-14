@@ -10,12 +10,12 @@ def Change_dtype(file):
 	variables = utils.get_variables(data)
 	orig_dtypes = utils.get_dtypes(data)
 	n_iter = file.get("number_of_columns")
-	var_with_dtype = {f"{var} ({dtype})": var for (var, dtype) in zip(variables, orig_dtypes)}
+	var_with_dtype = {f"{var} ({dtype})": var for (var, dtype) in orig_dtypes.items()}
 	change_dict = {}
 	temp_array=file.get("data")
 	for i in range(int(n_iter)):
 		var =temp_array[i].get("column_name")
-		dtype = orig_dtypes[variables.index(var)]
+		dtype = orig_dtypes[var]
 		temp_var=f"{var} ({dtype})"
 		desired_dtype = temp_array[i].get("desired_dtype")
 
@@ -36,6 +36,16 @@ def Change_dtype(file):
 		new_value = chg.fit_transform(data)
 		df = new_value.to_dict(orient="records")
 		return JsonResponse(df, safe=False)
+	else:
+		failed = [
+			f"'{var}' cannot be converted to '{dtype}'"
+			for (var, dtype), ok in zip(change_dict.items(), status)
+			if not ok
+		]
+		return JsonResponse(
+			{"error": "Type conversion failed", "details": failed},
+			status=400,
+		)
 
 #
 def change_check(data, var, dtype):

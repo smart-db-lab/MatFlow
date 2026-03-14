@@ -6,9 +6,11 @@ urlpatterns = [
     path('upload/', views.upload_file, name='upload_file'),
     path('create-folder/', views.create_folder, name='create_folder'),
     path('create-file/', views.create_file, name='create_file'),
+    path('update-file/', views.update_file, name='update_file'),
     path('delete/', views.delete_item, name='delete_item'),
     path('read_file/', views.read_file, name='read_file'),  # New route for reading file content
     path('rename/', views.rename_item, name='rename_item'),
+    path('move/', views.move_item, name='move_item'),
     path('fetch_file/', views.fetch_file_as_attachment, name='fetch_file'),
 
 

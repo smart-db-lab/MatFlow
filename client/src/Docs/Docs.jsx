@@ -1047,13 +1047,12 @@ function Docs({ section }) {
           </h3>
           <ol className="list-decimal list-inside text-gray-700">
             <li className="mb-4">
-              <strong>Select Test Train Dataset:</strong> Choose the dataset to
-              be used for model evaluation from the dropdown menu (e.g.,{" "}
-              <code>Iris_Species</code>).
-            </li>
-            <li className="mb-4">
               <strong>Select Model:</strong> Pick a trained model from the list,
               such as <code>KNN_Classification</code>, to use for predictions.
+            </li>
+            <li className="mb-4">
+              <strong>Select Dataset:</strong> The related dataset is resolved
+              automatically from the selected model.
             </li>
             <li className="mb-4">
               <strong>Select Columns:</strong> Specify the columns to be used

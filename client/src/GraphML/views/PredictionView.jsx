@@ -3,7 +3,7 @@ import { TrendingUp, CheckCircle, AlertCircle, Loader, Edit2, Maximize2, Minimiz
 import DataTable from '../components/DataTable';
 import FileUpload from '../components/FileUpload';
 import PredictionResults from '../components/PredictionResults';
-import Papa from "papaparse";
+import * as Papa from "papaparse";
 
 const PredictionView = ({
   trainedModelBase64,

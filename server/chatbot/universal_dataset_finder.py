@@ -1,9 +1,18 @@
 # universal_dataset_finder.py
 
 import requests
-import openml
-from datasets import load_dataset
-from huggingface_hub import list_datasets
+try:
+    import openml
+except ImportError:
+    openml = None  # type: ignore
+try:
+    from datasets import load_dataset
+except ImportError:
+    load_dataset = None  # type: ignore
+try:
+    from huggingface_hub import list_datasets
+except ImportError:
+    list_datasets = None  # type: ignore
 from kaggle.api.kaggle_api_extended import KaggleApi
 
 # ----- FIX: prevent kaggle authentication on import -----

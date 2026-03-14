@@ -10,6 +10,10 @@ import App from "./App.jsx";
 import "./index.css";
 import store from "./store.js";
 import 'react-toastify/dist/ReactToastify.css';
+
+const APP_BASENAME =
+  (import.meta.env.VITE_APP_BASE_PATH || "/").replace(/\/+$/, "") || "/";
+
 const theme = createTheme({
   type: "light",
   theme: {
@@ -23,7 +27,7 @@ const theme = createTheme({
 ReactDOM.createRoot(document.getElementById("root")).render(
   // <React.StrictMode>
   <Provider store={store}>
-    <BrowserRouter>
+    <BrowserRouter basename={APP_BASENAME}>
       <NextUIProvider theme={theme}>
         <App />
         <ToastContainer

@@ -7,6 +7,8 @@ from Matflow.debug_utilities import debug, info, error, debug_function
 DEFAULT_TEST_SIZE = 0.2
 DEFAULT_RANDOM_STATE = 42
 DEFAULT_SHUFFLE = True
+MIN_RANDOM_STATE = 0
+MAX_RANDOM_STATE = 250
 
 @debug_function
 def split_dataset(file):
@@ -38,6 +40,14 @@ def split_dataset(file):
             random_state = DEFAULT_RANDOM_STATE
         else:
             random_state = int(random_state)
+        
+        if not MIN_RANDOM_STATE <= random_state <= MAX_RANDOM_STATE:
+            error_msg = (
+                f"random_state must be between {MIN_RANDOM_STATE} and "
+                f"{MAX_RANDOM_STATE}. Received: {random_state}"
+            )
+            error(error_msg)
+            return JsonResponse({"error": error_msg}, status=400)
             
         # Fix for the current issue - ensure shuffle is always a boolean
         shuffle = file.get("shuffle")

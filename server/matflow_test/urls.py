@@ -1,11 +1,9 @@
 from django.urls import path
 from . import views
 from .views import *
+from .views import deploy_batch_cancel, deploy_batch_status
 
 urlpatterns = [
-    path('signup/', signup, name='signup'),
-    path('verify-code/', verify_code, name='verify-code'),
-    path('login/', login, name='login'),
     path('display_group/', display_group, name='display-api'),
     path('display_correlation/', display_correlation, name='display-api'),
     path('display_correlation_featurePair/', display_correlation_featurePair, name='display-api'),
@@ -24,6 +22,7 @@ urlpatterns = [
     path('feature_selection/', feature_selection_api, name='dropping'),
     path('cluster/', Cluster, name='dropping'),
     path('split_dataset/', Split, name='dropping'),
+    path('dataset_metadata/', DatasetMetadata, name='dataset_metadata'),
     path('build_model/', Build_model, name='dropping'),
     path('time_series/', Time_series, name='dropping'),
     path('time_series_analysis/', Time_series_analysis, name='dropping'),
@@ -34,5 +33,8 @@ urlpatterns = [
     path('reverseml/', Reverse_ml, name='dropping'),
     path('deploy_data/', deploy_data, name="deploy_data"),
     path('deploy_result/', deploy_result, name="deploy_result"),
+    path('deploy_batch/', deploy_batch, name="deploy_batch"),
+    path('deploy_batch_status/<str:task_id>/', deploy_batch_status, name="deploy_batch_status"),
+    path('deploy_batch_cancel/<str:task_id>/', deploy_batch_cancel, name="deploy_batch_cancel"),
     path('feature_creation/', feature_creation, name="feature_creation"),
 ]

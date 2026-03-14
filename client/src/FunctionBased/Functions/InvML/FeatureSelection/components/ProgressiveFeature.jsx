@@ -1,4 +1,4 @@
-import { Input, Progress, Radio, Button } from "@nextui-org/react";
+import { Input, Progress, Radio, Button } from "../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import Plot from "react-plotly.js";

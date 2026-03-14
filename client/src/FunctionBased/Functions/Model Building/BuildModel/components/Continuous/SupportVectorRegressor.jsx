@@ -1,4 +1,4 @@
-import { Input, Loading } from "@nextui-org/react";
+import { Input, Loading } from "../../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";
@@ -89,9 +89,9 @@ function SupportVectorRegressor({
           <h1 className="text-2xl font-medium tracking-wide mb-2">
             Hyperparameter Optimization Settings
           </h1>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="w-full flex flex-col justify-start gap-4 mt-2">
-              <div className="w-full">
+          <div className="mt-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:max-w-xs">
                 <p className="mb-1">Number of cross-validation folds</p>
                 <Input
                   onChange={(e) =>
@@ -102,14 +102,13 @@ function SupportVectorRegressor({
                       })
                     )
                   }
-                  fullWidth
                   bordered
-                  color="success"
                   type="number"
+                  className="w-full"
                 />
               </div>
             </div>
-            <div className="w-full">
+            <div className="w-full mt-4">
               {hData && hData.result && (
                 <>
                   <p className="mb-2 font-medium tracking-wide">
@@ -120,7 +119,7 @@ function SupportVectorRegressor({
               )}
               {loading && (
                 <div className="grid place-content-center h-full">
-                  <Loading size="lg" color={"success"}>
+                  <Loading size="lg">
                     Fetching Data...
                   </Loading>
                 </div>
@@ -151,7 +150,6 @@ function SupportVectorRegressor({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="C"
             value={optimizedData.C}
             onChange={(e) =>
@@ -168,7 +166,6 @@ function SupportVectorRegressor({
             }
             step={0.01}
             bordered
-            color="success"
             label="Epsilon"
           />
 

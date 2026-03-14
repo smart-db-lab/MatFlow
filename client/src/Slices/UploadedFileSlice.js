@@ -17,7 +17,7 @@ export const UploadedFileSlice = createSlice({
 
       // Note: Cache clearing is now handled in the component level
       // to avoid race conditions with data fetching
-      console.log(`🔄 Active file changed: ${state.previousFile} → ${payload}`);
+      console.log(`🔄 Active file changed: ${JSON.stringify(state.previousFile)} → ${JSON.stringify(payload)}`);
     },
     setReRender: (state, { payload }) => {
       state.rerender = payload;

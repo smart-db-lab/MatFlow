@@ -152,7 +152,7 @@ export const DATASET_NODES = [
   },
   {
     key: "0-3",
-    label: "Corelation",
+    label: "Correlation",
     icon: <TbCirclesRelation size={20} className="text-[rgba(0,0,0,0.54)]" />,
   },
   {
@@ -199,7 +199,7 @@ export const MODEL_BUILDING = [
 export const FUNCTION_NODES = [
   {
     key: "1",
-    label: "EDA",
+    label: "Visual Data Analysis",
     icon: <InsertChartOutlinedIcon color="action" />,
     children: [],
   },
@@ -223,7 +223,7 @@ export const FUNCTION_NODES = [
   // },
   {
     key: "6",
-    label: "Model Deployment",
+    label: "Materials Property Prediction",
     icon: <RxRocket className="text-[rgba(0,0,0,0.54)]" size={"20"} />,
     children: [],
   },
@@ -300,18 +300,19 @@ export let NODES = {
   EDA: ["Graph"],
   ReverseML: ["Table"],
   "Time Series Analysis": ["Graph"],
+  "Materials Property Prediction": ["Table", "Text"],
   "Model Deployment": ["Table", "Text"],
   "Split Dataset": ["Test-Train Dataset"],
   "Test-Train Dataset": ["Build Model", "Hyper-parameter Optimization", "File"],
   "Hyper-parameter Optimization": ["Build Model"],
   "Build Model": ["Model"],
-  Model: ["Model Deployment", "Model Evaluation", "Model Prediction"],
+  Model: ["Materials Property Prediction", "Model Evaluation", "Model Prediction"],
   "Model Evaluation": ["Table", "Graph"],
   "Model Prediction": ["Graph", "Table", "Text"],
 };
 
 DATASET_NODES.forEach((val) => {
-  if (val.label === "Corelation")
+  if (val.label === "Correlation")
     NODES = { ...NODES, [val.label]: ["Table", "Graph"] };
   else NODES = { ...NODES, [val.label]: ["Table"] };
 });

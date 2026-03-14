@@ -11,6 +11,12 @@ function ConfirmDeleteModal({
 }) {
   if (!isOpen) return null;
 
+  const safeItemName = String(itemName || "");
+  const truncatedItemName =
+    safeItemName.length > 120
+      ? `${safeItemName.slice(0, 117)}...`
+      : safeItemName;
+
   const handleConfirm = async () => {
     try {
       await onConfirm?.();
@@ -25,7 +31,7 @@ function ConfirmDeleteModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl border border-gray-200 max-w-sm w-full mx-4 overflow-hidden"
+        className="bg-white rounded-xl border border-gray-200 max-w-md w-full mx-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 pt-6 pb-4">
@@ -38,11 +44,16 @@ function ConfirmDeleteModal({
             </h2>
           </div>
 
-          <p className="text-sm text-gray-600 text-justify mt-3 leading-relaxed">
-            Are you sure you want to delete {itemTypeLabel}{" "}
-            <span className="font-medium text-gray-700">"{itemName}"</span>?
+          <p className="text-sm text-gray-600 mt-3 leading-relaxed text-center">
+            Are you sure you want to delete this {itemTypeLabel}?
           </p>
-          <p className="text-sm text-gray-600 text-justify mt-1.5 font-medium">
+          <p
+            className="mt-2 text-xs sm:text-sm font-medium text-gray-700 text-center break-words"
+            title={safeItemName}
+          >
+            {truncatedItemName}
+          </p>
+          <p className="text-sm text-gray-600 mt-2 font-medium text-center">
             This action cannot be undone.
           </p>
         </div>

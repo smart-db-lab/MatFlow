@@ -1,8 +1,11 @@
-import { Input } from "@nextui-org/react";
 import React, { useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
 import { setData } from "../../../../../Slices/FeatureEngineeringSlice";
-import SingleDropDown from "../../../../Components/SingleDropDown/SingleDropDown";
+import TextField from "@mui/material/TextField";
+import FormControl from "@mui/material/FormControl";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import Autocomplete from "@mui/material/Autocomplete";
 
 function Modify_ReplaceValue({
   csvData,
@@ -90,101 +93,104 @@ function Modify_ReplaceValue({
   return (
     <div>
       <div className="flex flex-col gap-1">
-        <label htmlFor="">Sub Methods</label>
-        <select
-          name=""
-          id=""
+        <label className="block text-sm font-semibold text-gray-900 mb-1.5">Sub Method</label>
+        <FormControl size="small" className="w-full md:max-w-[320px]">
+          <Select
           value={subMethod}
-          className="px-2 py-3 rounded-lg"
           onChange={(e) => handleSubMethod(e.target.value)}
         >
-          <option value="Text Input">Text Input</option>
-          <option value="Numpy Operations">Numpy Operations</option>
-          <option value="Fill Null">Fill Null</option>
-          <option value="String Operations">String Operations</option>
-        </select>
+          <MenuItem value="Text Input">Text Input</MenuItem>
+          <MenuItem value="Numpy Operations">Numpy Operations</MenuItem>
+          <MenuItem value="Fill Null">Fill Null</MenuItem>
+          <MenuItem value="String Operations">String Operations</MenuItem>
+          </Select>
+        </FormControl>
       </div>
       <div className="my-4">
         {subMethod === "Text Input" && (
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px]">
-              <Input
+              <TextField
                 fullWidth
                 label="Old Value"
                 value={data.old_value || ""}
                 onChange={(e) => setdata({ ...data, old_value: e.target.value })}
-                size="sm"
+                size="small"
               />
             </div>
             <div className="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px]">
-              <Input
+              <TextField
                 label="New Value"
                 fullWidth
                 value={data.new_value || ""}
                 onChange={(e) => setdata({ ...data, new_value: e.target.value })}
-                size="sm"
+                size="small"
               />
             </div>
           </div>
         )}
         {subMethod === "Numpy Operations" && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="">Select an operation</label>
-            <select
+            <label className="block text-sm font-semibold text-gray-900 mb-1.5">Select an operation</label>
+            <FormControl size="small" className="w-full md:max-w-[320px]">
+              <Select
               value={data.select_an_operation || "np.log10"}
-              className="px-2 py-3 rounded-lg"
               onChange={(e) =>
                 setdata({ ...data, select_an_operation: e.target.value })
               }
             >
-              <option value="np.log10">np.log10</option>
-              <option value="np.sin">np.sin</option>
-              <option value="np.cos">np.cos</option>
-              <option value="np.tan">np.tan</option>
-              <option value="np.exp">np.exp</option>
-            </select>
+              <MenuItem value="np.log10">np.log10</MenuItem>
+              <MenuItem value="np.sin">np.sin</MenuItem>
+              <MenuItem value="np.cos">np.cos</MenuItem>
+              <MenuItem value="np.tan">np.tan</MenuItem>
+              <MenuItem value="np.exp">np.exp</MenuItem>
+              </Select>
+            </FormControl>
           </div>
         )}
         {subMethod === "Fill Null" && (
           <>
             <div className="flex flex-col gap-1">
-              <label htmlFor="">Select method to fill null values</label>
-              <select
-                className="px-2 py-3 rounded-lg"
+              <label className="block text-sm font-semibold text-gray-900 mb-1.5">Select method to fill null values</label>
+              <FormControl size="small" className="w-full md:max-w-[320px]">
+                <Select
                 value={fillNullMethod}
                 onChange={(e) => {
                   setFillNullMethod(e.target.value);
                   setdata({ ...data, fill_null_values: e.target.value });
                 }}
               >
-                <option value="Custom Value">Custom Value</option>
-                <option value="Mean">Mean</option>
-                <option value="Median">Median</option>
-                <option value="Mode">Mode</option>
-                <option value="From Another Column">From Another Column</option>
-              </select>
+                <MenuItem value="Custom Value">Custom Value</MenuItem>
+                <MenuItem value="Mean">Mean</MenuItem>
+                <MenuItem value="Median">Median</MenuItem>
+                <MenuItem value="Mode">Mode</MenuItem>
+                <MenuItem value="From Another Column">From Another Column</MenuItem>
+                </Select>
+              </FormControl>
             </div>
             <div className="mt-4">
               {fillNullMethod === "Custom Value" && (
                 <div className="w-full max-w-md">
-                  <Input
+                  <TextField
                     fullWidth
                     label="Enter Custom Value"
                     value={data.enter_custom_value || ""}
                     onChange={(e) =>
                       setdata({ ...data, enter_custom_value: e.target.value })
                     }
-                    size="sm"
+                    size="small"
                   />
                 </div>
               )}
               {fillNullMethod === "From Another Column" && (
                 <div>
-                  <p>Select column</p>
-                  <SingleDropDown
-                    columnNames={columnNames}
-                    onValueChange={setFromAnotherColumn}
-                    initValue={from_another_column}
+                  <p className="text-sm font-semibold text-gray-900 mb-1.5">Select column</p>
+                  <Autocomplete
+                    size="small"
+                    options={columnNames}
+                    value={from_another_column || null}
+                    onChange={(_, val) => setFromAnotherColumn(val || "")}
+                    renderInput={(params) => <TextField {...params} placeholder="Select column" />}
                   />
                 </div>
               )}
@@ -194,35 +200,34 @@ function Modify_ReplaceValue({
         {subMethod === "String Operations" && (
           <>
             <div className="flex flex-col gap-1 mb-4">
-              <label htmlFor="">Select an operation</label>
-              <select
-                name=""
-                id=""
-                className="px-2 py-3 rounded-lg"
+              <label className="block text-sm font-semibold text-gray-900 mb-1.5">Select an operation</label>
+              <FormControl size="small" className="w-full md:max-w-[320px]">
+                <Select
                 value={stringOperationMethod}
                 onChange={(e) => {
                   setStringOperationMethod(e.target.value);
                   setdata({ ...data, select_an_operation: e.target.value });
                 }}
               >
-                <option value="Uppercase">Uppercase</option>
-                <option value="Lowercase">Lowercase</option>
-                <option value="Title case">Title case</option>
-                <option value="Strip leading/trailing whitespace">
+                <MenuItem value="Uppercase">Uppercase</MenuItem>
+                <MenuItem value="Lowercase">Lowercase</MenuItem>
+                <MenuItem value="Title case">Title case</MenuItem>
+                <MenuItem value="Strip leading/trailing whitespace">
                   Strip leading/trailing whitespace
-                </option>
-                <option value="Remove leading whitespace">
+                </MenuItem>
+                <MenuItem value="Remove leading whitespace">
                   Remove leading whitespace
-                </option>
-                <option value="Remove trailing whitespace">
+                </MenuItem>
+                <MenuItem value="Remove trailing whitespace">
                   Remove trailing whitespace
-                </option>
-                <option value="Remove Characters">Remove Characters</option>
-              </select>
+                </MenuItem>
+                <MenuItem value="Remove Characters">Remove Characters</MenuItem>
+                </Select>
+              </FormControl>
             </div>
             {stringOperationMethod === "Remove Characters" && (
               <div className="w-full max-w-md">
-                <Input
+                <TextField
                   fullWidth
                   label="Enter character to remove"
                   value={data.enter_character_to_remove || ""}
@@ -232,7 +237,7 @@ function Modify_ReplaceValue({
                       enter_character_to_remove: e.target.value,
                     })
                   }
-                  size="sm"
+                  size="small"
                 />
               </div>
             )}

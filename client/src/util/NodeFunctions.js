@@ -614,7 +614,7 @@ export const handleDatasetCorrelation = async (rflow, params, outputType) => {
   try {
     const { table: rowData, correlation } = rflow.getNode(params.source).data;
 
-    if (!correlation) throw new Error("Check Corelation Node");
+    if (!correlation) throw new Error("Check Correlation Node");
 
     const calculateCorrelations = (data) => {
       let columnNames = Object.keys(data[0]);

@@ -16,8 +16,8 @@ A full-stack ML workflow platform — React frontend + Django REST backend.
 
 ## Setup
 #### Using Docker : 
-Open terminal & change directory to Project Directory. Here it is  MatFlow 
-        ```  cd MatFlow ```
+Open terminal & change directory to MLFlow 
+        ```  cd MLFlow ```
        
  Run this command 
         ``` docker compose up  --build  ``` 
@@ -50,7 +50,7 @@ conda install -c conda-forge psi4=1.9.1 -y
 
 ```bash
 cd server
-pip install --use-deprecated=legacy-resolver -r requirements.txt
+pip install -r requirements.txt
 ```
 
 **Step 4 — Fix numpy and scipy (via conda, not pip)**
@@ -62,14 +62,14 @@ conda install -c conda-forge numpy=1.26.4 scipy=1.13.1 -y
 > Using conda here ensures the binaries match. Installing numpy/scipy via pip
 > will cause `TypeError` crashes due to binary mismatches with conda packages.
 
-**Step 5 — Fix jax and ml-dtypes (via pip)**
+**Step 5 — Verify dependency health**
 
 ```bash
-pip install "jax==0.4.23" --force-reinstall --no-deps
-pip install "ml-dtypes==0.3.2" --force-reinstall --no-deps
+pip check
 ```
 
-> `--no-deps` prevents pip from pulling numpy/scipy back to incompatible versions.
+> `requirements.txt` already pins a TensorFlow/MLflow-compatible set
+> (`jax==0.4.23`, `jaxlib==0.4.23`, `ml_dtypes==0.2.0`, `packaging==25.0`).
 
 **Step 6 — Run migrations and create admin user**
 
@@ -127,6 +127,26 @@ Open **4 terminals** and run one command in each:
 | 4 | `client/` | `npm run dev` |
 
 > **Windows PowerShell note:** Use `;` instead of `&&` to chain commands. Always use `--pool=solo` for Celery on Windows.
+
+### Celery (start / stop)
+
+**Start Celery worker (PowerShell):**
+
+```bash
+cd server
+conda activate venv
+celery -A Matflow worker -l info --pool=solo
+python -m celery -A Matflow worker -l info --pool=solo
+```
+
+**Stop Celery worker:**
+
+- In the same terminal, press `Ctrl + C` (once or twice) to stop gracefully.
+- If it was started in another terminal and you want to force stop:
+
+```bash
+Get-Process -Name celery | Stop-Process -Force
+```
 
 ---
 

@@ -6,6 +6,7 @@ import { mlflowApi } from "../services/api/mlflowApi";
 function HomePage() {
   const [headerSection, setHeaderSection] = useState(null);
   const [heroImages, setHeroImages] = useState([]);
+  const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
   const [faqs, setFaqs] = useState([]);
   const [faqLoading, setFaqLoading] = useState(false);
   const [faqLoaded, setFaqLoaded] = useState(false);
@@ -82,6 +83,24 @@ function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (heroImages.length === 0) {
+      setCurrentHeroIndex(0);
+      return;
+    }
+    setCurrentHeroIndex((prev) => (prev >= heroImages.length ? 0 : prev));
+  }, [heroImages.length]);
+
+  useEffect(() => {
+    if (heroImages.length <= 1) return;
+
+    const slideInterval = window.setInterval(() => {
+      setCurrentHeroIndex((prev) => (prev + 1) % heroImages.length);
+    }, 5000);
+
+    return () => window.clearInterval(slideInterval);
+  }, [heroImages.length]);
+
   const loadFaqs = async () => {
     if (faqLoaded) return;
     setFaqLoading(true);
@@ -102,6 +121,7 @@ function HomePage() {
 
   const NAVBAR_HEIGHT = 70;
   const SCROLL_OFFSET = NAVBAR_HEIGHT + 14;
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
 
   const scrollToId = (id) => {
     const el = document.getElementById(id);
@@ -145,9 +165,28 @@ function HomePage() {
     return "The most intuitive platform for machine learning. Design workflows, train models, and deploy solutions\u2014all through a simple, visual interface. Perfect for data scientists, analysts, and teams who want results fast.";
   };
 
-  const heroImageSrc = heroImages.length > 0 && heroImages[0]?.hero_image
-    ? heroImages[0].hero_image
-    : "iso-ai.jpg";
+  const resolveHeroImageSrc = (imagePath) => {
+    if (!imagePath) return "iso-ai.jpg";
+    if (typeof imagePath !== "string") return "iso-ai.jpg";
+    if (imagePath.startsWith("http")) return imagePath;
+    if (imagePath.startsWith("/")) return `${baseUrl}${imagePath}`;
+    return imagePath;
+  };
+
+  const heroImageSrc =
+    heroImages.length > 0
+      ? resolveHeroImageSrc(heroImages[currentHeroIndex]?.hero_image)
+      : "iso-ai.jpg";
+
+  const goToPreviousSlide = () => {
+    if (heroImages.length <= 1) return;
+    setCurrentHeroIndex((prev) => (prev - 1 + heroImages.length) % heroImages.length);
+  };
+
+  const goToNextSlide = () => {
+    if (heroImages.length <= 1) return;
+    setCurrentHeroIndex((prev) => (prev + 1) % heroImages.length);
+  };
 
   const features = [
     {
@@ -245,7 +284,7 @@ function HomePage() {
             {/* CTA buttons */}
             <div className="mf-hero-enter-d3 flex flex-wrap items-center gap-3 mt-2">
               <Link
-                to="/dashboard"
+                to="/matflow/dashboard"
                 className="inline-flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200"
               >
                 Get Started
@@ -294,12 +333,56 @@ function HomePage() {
                   </div>
                   <span className="text-xs text-gray-400 font-medium">Matflow &middot; No Code ML</span>
                 </div>
-                <div className="bg-illustration-bg p-4">
-                  <img
-                    src={heroImageSrc}
-                    alt="Matflow Platform"
-                    className="w-full h-auto object-contain rounded-lg"
-                  />
+                <div className="bg-[#dff5ef] p-0 relative">
+                  <div className="relative w-full h-[240px] sm:h-[280px] md:h-[320px] overflow-hidden bg-[#dff5ef]">
+                    <img
+                      src={heroImageSrc}
+                      alt="Matflow Platform"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = "iso-ai.jpg";
+                      }}
+                    />
+                  </div>
+                  {heroImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={goToPreviousSlide}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-700 rounded-full p-2 shadow-sm transition-all duration-200"
+                        aria-label="Previous slide"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={goToNextSlide}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-700 rounded-full p-2 shadow-sm transition-all duration-200"
+                        aria-label="Next slide"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+                        {heroImages.map((_, index) => (
+                          <button
+                            key={`hero-dot-${index}`}
+                            type="button"
+                            onClick={() => setCurrentHeroIndex(index)}
+                            className={`rounded-full transition-all duration-200 ${
+                              index === currentHeroIndex
+                                ? "w-6 h-2 bg-primary"
+                                : "w-2 h-2 bg-white/80 hover:bg-white"
+                            }`}
+                            aria-label={`Go to slide ${index + 1}`}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="px-4 py-3 border-t border-gray-100 bg-white">
                   <p className="text-xs font-semibold text-gray-900">Quick start</p>

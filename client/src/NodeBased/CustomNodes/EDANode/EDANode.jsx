@@ -66,7 +66,7 @@ function EDANode({ id, data }) {
         )}
         <div className="grid place-items-center p-2 py-3 min-w-[80px]">
           <InsertChartOutlinedIcon />
-          <span>EDA</span>
+          <span>Visual Data Analysis</span>
         </div>
       </div>
       {data && data.table && (

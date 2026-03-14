@@ -1,4 +1,5 @@
 import os
+import shutil
 import pandas as pd
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse, FileResponse
@@ -46,6 +47,7 @@ def rename_item(request):
     """
     API endpoint to rename a file or folder.
     Expects 'currentName', 'newName', and 'parentFolder' in the request body.
+    Workspace-scoped rename only (no legacy project-root fallback).
     """
     if request.method == 'POST':
         try:
@@ -54,21 +56,37 @@ def rename_item(request):
             current_name = body.get('currentName')
             new_name = body.get('newName')
             parent_folder = body.get('parentFolder', '')
-
             project_id = body.get('project_id')
-            dataset_dir, error_response = get_project_dataset_dir(request, project_id_override=project_id)
+            workspace_id = body.get('workspace_id')
+
+            workspace_obj, raw_sub_path, error_response = _resolve_workspace_for_request(
+                project_id=project_id,
+                folder=parent_folder,
+                workspace_id=workspace_id,
+            )
             if error_response:
                 return error_response
 
-            # Construct paths
-            current_path = os.path.join(dataset_dir, parent_folder, current_name)
-            new_path = os.path.join(dataset_dir, parent_folder, new_name)
+            normalized_parent = _normalize_workspace_sub_path(raw_sub_path)
+            parent_path = os.path.join(
+                workspace_obj.base_dir,
+                normalized_parent,
+            ) if normalized_parent else workspace_obj.base_dir
 
-            # Check if the current item exists
+            # Virtual workspace-root rename in sidebar: rename DB name only.
+            if not normalized_parent and current_name == workspace_obj.name:
+                workspace_obj.name = new_name
+                workspace_obj.save(update_fields=["name", "updated_at"])
+                return JsonResponse(
+                    {"message": f"Workspace renamed to '{new_name}' successfully!"},
+                    status=200,
+                )
+
+            current_path = os.path.join(parent_path, current_name)
+            new_path = os.path.join(parent_path, new_name)
             if not os.path.exists(current_path):
                 return JsonResponse({"error": "Item to rename not found."}, status=404)
 
-            # Rename the file or folder
             os.rename(current_path, new_path)
             return JsonResponse({"message": f"Renamed '{current_name}' to '{new_name}' successfully!"}, status=200)
         except Exception as e:
@@ -93,6 +111,196 @@ def get_nested_directory_structure(root_path):
             structure['files'].append(item)
     return structure
 
+
+def _get_workspace_structure_for_project(project_id):
+    """
+    Build a nested directory structure from the new workspace system.
+
+    Maps workspace name → disk contents of workspace.base_dir so each workspace
+    appears as a top-level folder in the sidebar with sub-folders:
+      original_dataset/   <- the uploaded file
+      output/generated_datasets/
+      output/train_test/
+      output/charts/
+      output/models/
+    """
+    from projects.models import Workspace
+    workspaces_root = {}
+    try:
+        workspaces = Workspace.objects.filter(project_id=project_id).select_related('project')
+    except Exception:
+        return workspaces_root
+
+    for ws in workspaces:
+        if not os.path.exists(ws.base_dir):
+            continue
+        ws_structure = get_nested_directory_structure(ws.base_dir)
+        workspaces_root[ws.name] = ws_structure
+
+    return workspaces_root
+
+
+def _resolve_workspace_file_path(project_id, folder, filename):
+    """
+    Resolve a file path that lives inside a workspace.
+
+    The directory listing uses workspace.name as the top-level folder key, but
+    the file actually lives under workspace.base_dir on disk.
+
+    folder examples:
+      "<ws_name>/original_dataset"
+      "<ws_name>/output/generated_datasets"
+
+    Returns the absolute file path if a matching workspace is found, else None.
+    """
+    from projects.models import Workspace
+
+    if not folder:
+        return None
+
+    parts = folder.split("/", 1)          # ["<ws_name>", "rest/of/path"]
+    ws_name = parts[0]
+    sub_path = parts[1] if len(parts) > 1 else ""
+
+    try:
+        ws = Workspace.objects.get(project_id=project_id, name=ws_name)
+    except Exception:
+        return None
+
+    candidate = os.path.join(ws.base_dir, sub_path, filename)
+    return candidate if os.path.isfile(candidate) else None
+
+
+WORKSPACE_OUTPUT_ALIAS_MAP = {
+    "charts": "output/charts",
+    "output/charts": "output/charts",
+    "output/chart": "output/charts",
+    "train_test": "output/train_test",
+    "output/train_test": "output/train_test",
+    "generated_datasets": "output/generated_datasets",
+    "output/generated_datasets": "output/generated_datasets",
+    "models": "output/models",
+    "output/models": "output/models",
+    "output/csv": "output/generated_datasets",
+    "output/actual_vs_predicted_datasets": "output/generated_datasets",
+}
+
+
+def _normalize_path(path_value):
+    return str(path_value or "").replace("\\", "/").strip("/")
+
+
+def _resolve_workspace_for_request(project_id, folder="", workspace_id=None):
+    from projects.models import Workspace
+
+    if not project_id:
+        return None, "", JsonResponse(
+            {"error": "project_id is required for workspace-scoped writes."},
+            status=400,
+        )
+
+    normalized_folder = _normalize_path(folder)
+
+    if workspace_id:
+        try:
+            ws = Workspace.objects.get(pk=workspace_id, project_id=project_id)
+        except Workspace.DoesNotExist:
+            return None, "", JsonResponse(
+                {"error": "Invalid workspace_id for the given project."},
+                status=400,
+            )
+        if normalized_folder == ws.name:
+            return ws, "", None
+        if normalized_folder.startswith(f"{ws.name}/"):
+            return ws, normalized_folder[len(ws.name) + 1 :], None
+        return ws, normalized_folder, None
+
+    if not normalized_folder:
+        return None, "", JsonResponse(
+            {
+                "error": (
+                    "Workspace context missing. Provide workspace_id or a "
+                    "workspace-prefixed folder path."
+                )
+            },
+            status=400,
+        )
+
+    ws_name, *rest = normalized_folder.split("/", 1)
+    sub_path = rest[0] if rest else ""
+    workspaces = Workspace.objects.filter(project_id=project_id, name=ws_name)
+    if not workspaces.exists():
+        return None, "", JsonResponse(
+            {"error": f"Workspace '{ws_name}' not found for project."},
+            status=400,
+        )
+    if workspaces.count() > 1:
+        return None, "", JsonResponse(
+            {
+                "error": (
+                    f"Workspace name '{ws_name}' is ambiguous. "
+                    "Use workspace_id instead."
+                )
+            },
+            status=400,
+        )
+    return workspaces.first(), sub_path, None
+
+
+def _normalize_workspace_sub_path(sub_path):
+    normalized = _normalize_path(sub_path).lower()
+    if not normalized:
+        return ""
+    if normalized in WORKSPACE_OUTPUT_ALIAS_MAP:
+        return WORKSPACE_OUTPUT_ALIAS_MAP[normalized]
+    return normalized
+
+
+def _resolve_workspace_write_target(
+    project_id,
+    folder,
+    filename=None,
+    workspace_id=None,
+    require_output_path=False,
+):
+    ws, raw_sub_path, error_response = _resolve_workspace_for_request(
+        project_id=project_id,
+        folder=folder,
+        workspace_id=workspace_id,
+    )
+    if error_response:
+        return None, error_response
+
+    sub_path = _normalize_workspace_sub_path(raw_sub_path)
+    if not sub_path:
+        return None, JsonResponse(
+            {"error": "Target folder is required for workspace writes."},
+            status=400,
+        )
+
+    if require_output_path and not sub_path.startswith("output/"):
+        return None, JsonResponse(
+            {
+                "error": (
+                    "Artifact writes must target workspace output folders: "
+                    "output/charts, output/train_test, output/generated_datasets, output/models."
+                )
+            },
+            status=400,
+        )
+
+    target = os.path.join(ws.base_dir, sub_path, filename) if filename else os.path.join(
+        ws.base_dir,
+        sub_path,
+    )
+    target_abs = os.path.abspath(target)
+    ws_abs = os.path.abspath(ws.base_dir)
+    if os.path.commonpath([ws_abs, target_abs]) != ws_abs:
+        return None, JsonResponse({"error": "Invalid workspace target path."}, status=400)
+
+    return target_abs, None
+
+
 def get_dataset_structure(request):
     """
     View that returns the nested folder and file structure within the dataset directory.
@@ -110,9 +318,16 @@ def get_dataset_structure(request):
 
     # If folder and file are provided, read the file content
     if folder or file:
-        # Construct the file path based on the folder and file names
-        file_path = os.path.join(dataset_dir, folder or "", file)
-        # print(file_path)
+        project_id = request.GET.get("project_id")
+
+        # First try resolving through the workspace system
+        file_path = None
+        if project_id:
+            file_path = _resolve_workspace_file_path(project_id, folder, file)
+
+        # Fall back to the legacy dataset directory
+        if not file_path:
+            file_path = os.path.join(dataset_dir, folder or "", file)
 
         # Check if the file exists at the constructed path
         if os.path.isfile(file_path):
@@ -138,6 +353,13 @@ def get_dataset_structure(request):
     # If no specific file is requested, return the nested directory structure
     nested_structure = get_nested_directory_structure(dataset_dir)
 
+    # Merge in the new workspace-based structure (if any)
+    project_id = request.GET.get("project_id")
+    if project_id:
+        ws_structure = _get_workspace_structure_for_project(project_id)
+        # Merge workspace folders directly at the root level (no extra "workspaces" key)
+        nested_structure.update(ws_structure)
+
     # Return the directory structure as a JSON response
     return JsonResponse(nested_structure, safe=False)
 
@@ -150,20 +372,57 @@ def create_folder(request):
     except (json.JSONDecodeError, TypeError):
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
     project_id = data.get('project_id')
-    dataset_dir, error_response = get_project_dataset_dir(request, project_id_override=project_id)
+    workspace_id = data.get('workspace_id')
+
+    folder_name = str(data.get('folderName') or '').strip()
+    parent = str(data.get('parent') or '').strip('/\\')
+
+    if not folder_name:
+        return JsonResponse({"error": "Folder name is required"}, status=400)
+
+    # Basic path safety validation.
+    if '..' in folder_name or '/' in folder_name or '\\' in folder_name:
+        return JsonResponse({"error": "Invalid folder name"}, status=400)
+    if '..' in parent:
+        return JsonResponse({"error": "Invalid parent folder"}, status=400)
+
+    workspace_obj, raw_sub_path, error_response = _resolve_workspace_for_request(
+        project_id=project_id,
+        folder=parent,
+        workspace_id=workspace_id,
+    )
     if error_response:
         return error_response
+    normalized_parent_sub_path = _normalize_workspace_sub_path(raw_sub_path)
+    parent_path = os.path.join(
+        workspace_obj.base_dir,
+        normalized_parent_sub_path,
+    ) if normalized_parent_sub_path else workspace_obj.base_dir
 
-    folder_name = data.get('folderName')
-    parent = data.get('parent')
+    os.makedirs(parent_path, exist_ok=True)
 
-    # Create the folder inside the dataset directory for this project
-    if folder_name:
-        folder_path = os.path.join(dataset_dir, parent or "", folder_name)
-        os.makedirs(folder_path, exist_ok=True)
-        return JsonResponse({"message": "Folder created successfully!"}, status=201)
+    # Create folder using Windows-style suffixing on conflicts:
+    # test, test(1), test(2), ...
+    suffix = 0
+    created_name = folder_name
+    while True:
+        candidate = folder_name if suffix == 0 else f"{folder_name}({suffix})"
+        candidate_path = os.path.join(parent_path, candidate)
+        try:
+            os.makedirs(candidate_path, exist_ok=False)
+            created_name = candidate
+            break
+        except FileExistsError:
+            suffix += 1
 
-    return JsonResponse({"error": "Folder name is required"}, status=400)
+    return JsonResponse(
+        {
+            "message": "Folder created successfully!",
+            "folder_name": created_name,
+            "renamed": created_name != folder_name,
+        },
+        status=201,
+    )
 
 
 @csrf_exempt
@@ -171,21 +430,23 @@ def upload_file(request):
     """
     Securely upload a file to a specific folder, bypassing default_storage restrictions.
     """
-    dataset_dir, error_response = get_project_dataset_dir(request)
-    if error_response:
-        return error_response
-
+    project_id = request.POST.get('project_id')
+    workspace_id = request.POST.get('workspace_id')
     folder = request.POST.get('folder', '').strip('/')  # Remove leading/trailing slashes
     file = request.FILES.get('file')
 
     if file:
         try:
-            # Ensure the folder exists inside project dataset directory
-            target_folder = os.path.join(dataset_dir, folder)
-            os.makedirs(target_folder, exist_ok=True)  # Create directory if it doesn't exist
-
-            # Construct the safe file path
-            file_path = os.path.join(target_folder, file.name)
+            file_path, error_response = _resolve_workspace_write_target(
+                project_id=project_id,
+                folder=folder,
+                filename=file.name,
+                workspace_id=workspace_id,
+                require_output_path=False,
+            )
+            if error_response:
+                return error_response
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
             # Write the file to the target location
             with open(file_path, 'wb') as destination:
@@ -197,43 +458,169 @@ def upload_file(request):
             return JsonResponse({"error": f"Error uploading file: {str(e)}"}, status=500)
 
     return JsonResponse({"error": "No file uploaded"}, status=400)
-import shutil
 @csrf_exempt
 def delete_item(request):
     """
     View to handle deletion of files and folders.
     Accepts 'folder' and optional 'file' as query parameters.
+    Workspace-scoped delete only (no legacy project-root fallback).
     """
     if request.method == 'DELETE':
-        dataset_dir, error_response = get_project_dataset_dir(request)
-        if error_response:
-            return error_response
-
+        project_id = request.GET.get('project_id')
+        workspace_id = request.GET.get('workspace_id')
         # Extract the folder and file parameters from the URL
         folder = request.GET.get('folder', '')
         file = request.GET.get('file')
 
         try:
-            # Construct the path based on whether it's a file or folder
+            workspace_obj, raw_sub_path, error_response = _resolve_workspace_for_request(
+                project_id=project_id,
+                folder=folder,
+                workspace_id=workspace_id,
+            )
+            if error_response:
+                return error_response
+            normalized_sub_path = _normalize_workspace_sub_path(raw_sub_path)
+
             if file:
-                path = os.path.join(dataset_dir, folder, file)
-                if os.path.isfile(path):
-                    os.remove(path)  # Delete the file
+                ws_path = os.path.join(
+                    workspace_obj.base_dir,
+                    normalized_sub_path,
+                    file,
+                ) if normalized_sub_path else os.path.join(
+                    workspace_obj.base_dir,
+                    file,
+                )
+                if os.path.isfile(ws_path):
+                    os.remove(ws_path)
                     return JsonResponse({"message": "File deleted successfully!"}, status=200)
-                else:
-                    return JsonResponse({"error": "File not found"}, status=404)
+                return JsonResponse({"error": "File not found"}, status=404)
             else:
-                path = os.path.join(dataset_dir, folder)
-                if os.path.isdir(path):
-                    # Use shutil.rmtree() to delete the folder and all its contents recursively
-                    shutil.rmtree(path)
+                ws_path = os.path.join(
+                    workspace_obj.base_dir,
+                    normalized_sub_path,
+                ) if normalized_sub_path else workspace_obj.base_dir
+                is_ws_root = not normalized_sub_path
+                if ws_path and os.path.isdir(ws_path):
+                    shutil.rmtree(ws_path)
+                    if is_ws_root:
+                        workspace_obj.delete()
                     return JsonResponse({"message": "Folder and its contents deleted successfully!"}, status=200)
-                else:
-                    return JsonResponse({"error": "Folder not found"}, status=404)
+                return JsonResponse({"error": "Folder not found"}, status=404)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
     return HttpResponse(status=405)  # Method not allowed
+
+
+@csrf_exempt
+def move_item(request):
+    """
+    Move a file or folder inside the same workspace.
+    Expects JSON body:
+      - project_id (required)
+      - sourcePath (required): workspace-prefixed path of file/folder to move
+      - destinationFolder (required): workspace-prefixed destination folder
+      - workspace_id (optional)
+    """
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
+    try:
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, TypeError):
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+        project_id = body.get("project_id")
+        workspace_id = body.get("workspace_id")
+        source_path = _normalize_path(body.get("sourcePath"))
+        destination_folder = _normalize_path(body.get("destinationFolder"))
+
+        if not source_path:
+            return JsonResponse({"error": "sourcePath is required."}, status=400)
+        if not destination_folder:
+            return JsonResponse(
+                {"error": "destinationFolder is required."},
+                status=400,
+            )
+
+        source_ws, source_raw_sub_path, source_error = _resolve_workspace_for_request(
+            project_id=project_id,
+            folder=source_path,
+            workspace_id=workspace_id,
+        )
+        if source_error:
+            return source_error
+
+        destination_ws, destination_raw_sub_path, destination_error = _resolve_workspace_for_request(
+            project_id=project_id,
+            folder=destination_folder,
+            workspace_id=workspace_id,
+        )
+        if destination_error:
+            return destination_error
+
+        if source_ws.id != destination_ws.id:
+            return JsonResponse(
+                {"error": "Cross-workspace move is not allowed."},
+                status=400,
+            )
+
+        source_sub_path = _normalize_workspace_sub_path(source_raw_sub_path)
+        destination_sub_path = _normalize_workspace_sub_path(destination_raw_sub_path)
+
+        if not source_sub_path:
+            return JsonResponse(
+                {"error": "Workspace root cannot be moved."},
+                status=400,
+            )
+
+        workspace_base = os.path.abspath(source_ws.base_dir)
+        source_abs_path = os.path.abspath(
+            os.path.join(source_ws.base_dir, source_sub_path),
+        )
+        destination_abs_dir = os.path.abspath(
+            os.path.join(source_ws.base_dir, destination_sub_path),
+        ) if destination_sub_path else workspace_base
+
+        if (
+            os.path.commonpath([workspace_base, source_abs_path]) != workspace_base
+            or os.path.commonpath([workspace_base, destination_abs_dir]) != workspace_base
+        ):
+            return JsonResponse({"error": "Invalid move path."}, status=400)
+
+        if not os.path.exists(source_abs_path):
+            return JsonResponse({"error": "Source item not found."}, status=404)
+        if not os.path.isdir(destination_abs_dir):
+            return JsonResponse({"error": "Destination folder not found."}, status=404)
+
+        item_name = os.path.basename(source_abs_path)
+        target_abs_path = os.path.abspath(os.path.join(destination_abs_dir, item_name))
+        if os.path.exists(target_abs_path):
+            return JsonResponse(
+                {"error": f"'{item_name}' already exists in destination."},
+                status=400,
+            )
+
+        if source_abs_path == target_abs_path:
+            return JsonResponse({"message": "Item already in destination."}, status=200)
+
+        if os.path.isdir(source_abs_path):
+            # Prevent moving a folder into itself (or its descendants).
+            if os.path.commonpath([source_abs_path, destination_abs_dir]) == source_abs_path:
+                return JsonResponse(
+                    {"error": "Cannot move a folder into itself."},
+                    status=400,
+                )
+
+        shutil.move(source_abs_path, target_abs_path)
+        return JsonResponse(
+            {"message": f"Moved '{item_name}' successfully."},
+            status=200,
+        )
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 @csrf_exempt
 def create_file(request):
@@ -250,9 +637,7 @@ def create_file(request):
             except (json.JSONDecodeError, TypeError):
                 return JsonResponse({"error": "Invalid JSON body"}, status=400)
             project_id = body.get('project_id')
-            dataset_dir, error_response = get_project_dataset_dir(request, project_id_override=project_id)
-            if error_response:
-                return error_response
+            workspace_id = body.get('workspace_id')
 
             data = body.get('data')
             filename = body.get('filename')
@@ -274,19 +659,100 @@ def create_file(request):
             except ValueError as e:
                 return JsonResponse({"error": f"Data is not compatible with CSV/Excel format: {str(e)}"}, status=400)
 
-            # Determine the path to save the file
-            folder_path = os.path.join(dataset_dir, foldername)
-            if not os.path.exists(folder_path):
-                os.makedirs(folder_path, exist_ok=True)  # Create the folder if it does not exist
+            file_path, error_response = _resolve_workspace_write_target(
+                project_id=project_id,
+                folder=foldername,
+                filename=filename,
+                workspace_id=workspace_id,
+                require_output_path=False,
+            )
+            if error_response:
+                return error_response
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-            # Create the full file path and save data according to the file type
-            file_path = os.path.join(folder_path, filename)
+            # Save data according to the file type
             if file_extension.lower() == '.csv':
-                df.to_csv(file_path, index=False)  # Save DataFrame as CSV
+                df.to_csv(file_path, index=False)
             elif file_extension.lower() == '.xlsx':
-                df.to_excel(file_path, index=False)  # Save DataFrame as Excel
+                df.to_excel(file_path, index=False)
 
             return JsonResponse({"message": f"File '{filename}' created successfully in '{foldername}'!"}, status=201)
+        except Exception as e:
+            print(e)
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return HttpResponse(status=405)  # Method not allowed
+
+
+def _resolve_workspace_write_path(project_id, folder, filename, workspace_id=None):
+    """
+    Like _resolve_workspace_file_path but returns the target path even if the file
+    does not yet exist on disk.  Used for write (overwrite / create) operations.
+    Returns the absolute path if a matching workspace is found, else None.
+    """
+    file_path, _ = _resolve_workspace_write_target(
+        project_id=project_id,
+        folder=folder,
+        filename=filename,
+        workspace_id=workspace_id,
+        require_output_path=False,
+    )
+    return file_path
+
+
+@csrf_exempt
+def update_file(request):
+    """
+    API endpoint to overwrite an existing file with new data.
+    Resolves workspace paths first, falls back to legacy project dataset directory.
+    Expects 'data', 'filename', 'foldername', and 'project_id' in the request body.
+    """
+    if request.method == 'POST':
+        try:
+            try:
+                body = json.loads(request.body)
+            except (json.JSONDecodeError, TypeError):
+                return JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+            project_id = body.get('project_id')
+            workspace_id = body.get('workspace_id')
+            data = body.get('data')
+            filename = body.get('filename')
+            foldername = body.get('foldername', '')
+
+            if not filename:
+                return JsonResponse({"error": "Filename is required."}, status=400)
+
+            file_extension = os.path.splitext(filename)[1]
+            if file_extension.lower() not in ['.csv', '.xlsx']:
+                return JsonResponse(
+                    {"error": f"Unsupported file extension: {file_extension}. Use .csv or .xlsx only."},
+                    status=400
+                )
+
+            try:
+                df = pd.DataFrame(data)
+            except ValueError as e:
+                return JsonResponse({"error": f"Data is not compatible with CSV/Excel format: {str(e)}"}, status=400)
+
+            file_path, error_response = _resolve_workspace_write_target(
+                project_id=project_id,
+                folder=foldername,
+                filename=filename,
+                workspace_id=workspace_id,
+                require_output_path=False,
+            )
+            if error_response:
+                return error_response
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+            if file_extension.lower() == '.csv':
+                df.to_csv(file_path, index=False)
+            elif file_extension.lower() == '.xlsx':
+                df.to_excel(file_path, index=False)
+
+            return JsonResponse({"message": f"File '{filename}' updated successfully!"}, status=200)
+
         except Exception as e:
             print(e)
             return JsonResponse({"error": str(e)}, status=500)
@@ -351,7 +817,15 @@ def read_file(request):
     """
     View to read the content of a specific file.
     Accepts 'folder' and 'file' query parameters to identify the file.
-    Returns the file content as a JSON response.
+
+    Optional pagination params:
+      - page       (int, 1-based): if provided, returns only that page's rows
+      - page_size  (int):          number of rows per page (default 200)
+      - meta_only  (bool):         if "1", return only metadata (no data rows)
+
+    When paginated, response is:
+      { data: [...], total_rows: N, columns: [...], page: P, page_size: PS }
+    When not paginated, returns full row array (backwards compatible).
     """
     info("read_file function called")
     debug_obj(request, "Request")
@@ -368,13 +842,82 @@ def read_file(request):
     # Construct and validate file path in this project's dataset directory
     file_path = os.path.join(dataset_dir, folder or "", file)
     if not os.path.isfile(file_path):
-        return JsonResponse({"error": f"File '{file}' not found in folder '{folder}'."}, status=404)
+        # Try resolving through the workspace system before giving up
+        project_id = request.GET.get("project_id") or request.POST.get("project_id")
+        if project_id:
+            ws_path = _resolve_workspace_file_path(project_id, folder, file)
+            if ws_path:
+                file_path = ws_path
+            else:
+                return JsonResponse({"error": f"File '{file}' not found in folder '{folder}'."}, status=404)
+        else:
+            return JsonResponse({"error": f"File '{file}' not found in folder '{folder}'."}, status=404)
 
-    # Read and process the file
+    # Check for pagination params
+    page_param = request.GET.get('page')
+    page_size_param = request.GET.get('page_size')
+    meta_only = request.GET.get('meta_only') == '1'
+
+    if page_param is not None or meta_only:
+        try:
+            page = max(1, int(page_param or 1))
+            page_size = max(1, min(int(page_size_param or 200), 2000))
+        except (ValueError, TypeError):
+            return JsonResponse({"error": "Invalid page or page_size parameter."}, status=400)
+        return read_and_process_file_paginated(file_path, page, page_size, meta_only)
+
+    # No pagination — return full file (backwards compatible)
     response = read_and_process_file(file_path)
 
     info(f"File '{file}' in folder '{folder}' processed successfully")
     return response
+
+
+def read_and_process_file_paginated(file_path, page, page_size, meta_only=False):
+    """Return a single page of rows plus total_rows + columns metadata."""
+    try:
+        file_extension = os.path.splitext(file_path)[1].lower()
+        if file_extension not in SUPPORTED_EXTENSIONS:
+            return JsonResponse({"error": f"Unsupported file type '{file_extension}'."}, status=400)
+
+        df = read_file_as_dataframe(file_path, file_extension)
+        total_rows = len(df)
+        columns = df.columns.tolist()
+
+        if meta_only:
+            dtype_map = {}
+            for col, dtype in df.dtypes.items():
+                if pd.api.types.is_bool_dtype(dtype):
+                    dtype_map[col] = "boolean"
+                elif pd.api.types.is_numeric_dtype(dtype):
+                    dtype_map[col] = "number"
+                else:
+                    dtype_map[col] = "string"
+
+            return JsonResponse({
+                "total_rows": total_rows,
+                "columns": columns,
+                "dtypes": dtype_map,
+                "page": 1,
+                "page_size": page_size,
+            })
+
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_df = df.iloc[start:end]
+
+        # Replace NaN/inf with None for clean JSON
+        page_df = page_df.where(pd.notnull(page_df), None)
+
+        return JsonResponse({
+            "data": page_df.to_dict(orient='records'),
+            "total_rows": total_rows,
+            "columns": columns,
+            "page": page,
+            "page_size": page_size,
+        })
+    except Exception as e:
+        return JsonResponse({"error": f"Error reading file: {str(e)}"}, status=500)
 
 
 def read_and_process_file(file_path):
@@ -398,6 +941,9 @@ def read_and_process_file(file_path):
         debug(f"DataFrame shape: {df.shape}")
         debug(f"DataFrame columns: {df.columns.tolist()}")
         debug(f"DataFrame memory usage: {df.memory_usage(deep=True).sum() / (1024 * 1024):.2f} MB")
+
+        # Replace NaN/inf with None for clean JSON serialization
+        df = df.where(pd.notnull(df), None)
 
         # Convert to dictionary for JSON response
         debug("Converting DataFrame to dictionary")

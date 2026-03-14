@@ -26,41 +26,42 @@ COLORS = {
 }
 
 def debug_print(message, level=DEBUG, show_caller=True):
-    """Print debug message with caller information if level is sufficient"""
-    if level >= CURRENT_DEBUG_LEVEL:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pass
+#     """Print debug message with caller information if level is sufficient"""
+#     if level >= CURRENT_DEBUG_LEVEL:
+#         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Get caller information
-        caller_info = ""
-        if show_caller:
-            frame = inspect.currentframe().f_back
-            filename = os.path.basename(frame.f_code.co_filename)
-            lineno = frame.f_lineno
-            func_name = frame.f_code.co_name
-            caller_info = f"{filename}:{func_name}:{lineno}"
+#         # Get caller information
+#         caller_info = ""
+#         if show_caller:
+#             frame = inspect.currentframe().f_back
+#             filename = os.path.basename(frame.f_code.co_filename)
+#             lineno = frame.f_lineno
+#             func_name = frame.f_code.co_name
+#             caller_info = f"{filename}:{func_name}:{lineno}"
         
-        # Get level name
-        level_name = {
-            DEBUG: "DEBUG",
-            INFO: "INFO",
-            WARNING: "WARNING",
-            ERROR: "ERROR",
-            CRITICAL: "CRITICAL"
-        }.get(level, "UNKNOWN")
+#         # Get level name
+#         level_name = {
+#             DEBUG: "DEBUG",
+#             INFO: "INFO",
+#             WARNING: "WARNING",
+#             ERROR: "ERROR",
+#             CRITICAL: "CRITICAL"
+#         }.get(level, "UNKNOWN")
         
-        # Format the message - handle different types
-        if isinstance(message, (dict, list, tuple)):
-            try:
-                formatted_message = json.dumps(message, indent=2)
-            except:
-                formatted_message = str(message)
-        else:
-            formatted_message = str(message)
+#         # Format the message - handle different types
+#         if isinstance(message, (dict, list, tuple)):
+#             try:
+#                 formatted_message = json.dumps(message, indent=2)
+#             except:
+#                 formatted_message = str(message)
+#         else:
+#             formatted_message = str(message)
         
-        # Construct the output
-        output = f"{COLORS.get(level, '')}{timestamp} | {level_name} | {caller_info} | {formatted_message}{COLORS['RESET']}"
+#         # Construct the output
+#         output = f"{COLORS.get(level, '')}{timestamp} | {level_name} | {caller_info} | {formatted_message}{COLORS['RESET']}"
         
-        print(output)
+#         print(output)
 
 def debug(message):
     debug_print(message, DEBUG)

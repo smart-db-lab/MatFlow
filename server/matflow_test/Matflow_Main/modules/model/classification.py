@@ -16,6 +16,32 @@ import joblib
 import numpy as np
 
 
+def _build_input_schema(df: pd.DataFrame):
+    schema = []
+    for col in df.columns:
+        col_dtype = df[col].dtype
+        if pd.api.types.is_bool_dtype(col_dtype):
+            data_type = "int"
+            default_value = 0
+        elif pd.api.types.is_integer_dtype(col_dtype):
+            data_type = "int"
+            default_value = int(df[col].dropna().median()) if not df[col].dropna().empty else 0
+        elif pd.api.types.is_numeric_dtype(col_dtype):
+            data_type = "float"
+            default_value = float(df[col].dropna().median()) if not df[col].dropna().empty else 0.0
+        else:
+            data_type = "string"
+            mode_series = df[col].dropna().astype(str).mode()
+            default_value = str(mode_series.iloc[0]) if not mode_series.empty else ""
+
+        schema.append({
+            "col": col,
+            "data_type": data_type,
+            "value": default_value,
+        })
+    return schema
+
+
 @debug_function
 def classification(file):
     info(f"Classification function called with keys: {file.keys()}")
@@ -153,7 +179,9 @@ def classification(file):
             "metrics": selected_metrics,
             "metrics_table": merged_list,
             "y_pred": y_prediction,
-            "model_deploy": model_encoded
+            "model_deploy": model_encoded,
+            "feature_columns": list(X_train.columns),
+            "input_schema": _build_input_schema(X_train),
         }
 
         debug("Classification function completed successfully")

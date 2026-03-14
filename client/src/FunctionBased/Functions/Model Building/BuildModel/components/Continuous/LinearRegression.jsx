@@ -1,4 +1,4 @@
-import { Checkbox, Input, Loading } from "@nextui-org/react";
+import { CircularProgress, TextField } from "@mui/material";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";
@@ -9,6 +9,7 @@ import {
 import MultipleDropDown from "../../../../../Components/MultipleDropDown/MultipleDropDown";
 import NextTable from "../../../../../Components/NextTable/NextTable";
 import { apiService } from "../../../../../../services/api/apiService";
+import SafeCheckbox from "../../../../../../Components/SafeCheckbox";
 
 const DISPLAY_METRICES = [
   "R-Squared",
@@ -79,18 +80,18 @@ function LinearRegression({
   };
 
   return (
-    <div>
+    <div className="font-sans text-gray-900">
       {Type === "function" && (
-        <div className="mb-6">
+        <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 md:p-5 shadow-sm">
           <h2 className="text-base font-semibold text-gray-700 mb-3">
             Hyperparameter Optimization Settings
           </h2>
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="flex-1 min-w-[200px] max-w-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Number of cross-validation folds
               </label>
-              <Input
+              <TextField
                 onChange={(e) =>
                   dispatch(
                     setHyperparameterData({
@@ -101,16 +102,15 @@ function LinearRegression({
                 }
                 value={hyperparameterOption?.["Number of cross-validation folds"] || ""}
                 type="number"
-                size="md"
-                bordered
-                className="w-full"
+                size="small"
+                fullWidth
               />
             </div>
-            <div className="flex-1 min-w-[200px] max-w-xs">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Random state for hyperparameter search
               </label>
-              <Input
+              <TextField
                 onChange={(e) =>
                   dispatch(
                     setHyperparameterData({
@@ -122,9 +122,8 @@ function LinearRegression({
                 }
                 value={hyperparameterOption?.["Random state for hyperparameter search"] || ""}
                 type="number"
-                size="md"
-                bordered
-                className="w-full"
+                size="small"
+                fullWidth
               />
             </div>
           </div>
@@ -139,9 +138,10 @@ function LinearRegression({
             )}
             {loading && (
               <div className="flex items-center justify-center py-8">
-                <Loading size="lg">
-                  <span className="text-gray-600">Fetching Data...</span>
-                </Loading>
+                <div className="flex items-center gap-2 text-gray-600">
+                  <CircularProgress size={20} />
+                  <span>Fetching Data...</span>
+                </div>
               </div>
             )}
           </div>
@@ -154,23 +154,22 @@ function LinearRegression({
           </button>
         </div>
       )}
-      <div className={Type === "function" ? "mt-6" : ""}>
+      <div className={`${Type === "function" ? "mt-4" : ""} rounded-xl border border-gray-200 bg-white p-4 md:p-5 shadow-sm`}>
         {Type === "function" && (
           <h2 className="text-base font-semibold text-gray-700 mb-3">
             Model Settings
           </h2>
         )}
-        <div className="flex flex-wrap items-end gap-4 mb-4">
-          <div className="flex-1 min-w-[150px] max-w-xs">
+        <div className="grid grid-cols-1 md:grid-cols-3 items-end gap-4 mb-4">
+          <div className="md:col-span-1">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Number of jobs
             </label>
-            <Input
+            <TextField
               value={optimizedData["Number of jobs"]}
               type="number"
-              size="md"
-              bordered
-              className="w-full"
+              size="small"
+              fullWidth
               onChange={(e) =>
                 setOptimizedData({
                   ...optimizedData,
@@ -179,8 +178,8 @@ function LinearRegression({
               }
             />
           </div>
-          <div className="flex items-center">
-            <Checkbox
+          <div className="md:col-span-2 flex items-center h-full">
+            <SafeCheckbox
               isSelected={optimizedData.fit_intercept}
               onChange={(e) =>
                 setOptimizedData({
@@ -191,14 +190,14 @@ function LinearRegression({
               size={Type === "node" ? "sm" : "md"}
             >
               <span className="text-sm font-medium text-gray-700">Fit Intercept</span>
-            </Checkbox>
+            </SafeCheckbox>
           </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Display Metrices
+            Display Metrics
           </label>
-          <div className="max-w-md">
+          <div className="max-w-xl">
             <MultipleDropDown
               columnNames={DISPLAY_METRICES}
               defaultValue={optimizedData["Display Metrices"]}

@@ -1,0 +1,33 @@
+--- client/src/util/modelDatasetSync.js
++++ client/src/util/modelDatasetSync.js
+@@ -79,11 +79,25 @@
+         const metaTest = meta[2] || "";
+ 
+         const trainFilePath = normalizePath(
+             folder,
+             metaTrain.endsWith(".csv") ? metaTrain : `${metaTrain}.csv`,
+         );
+         const testFilePath = normalizePath(
+             folder,
+             metaTest.endsWith(".csv") ? metaTest : `${metaTest}.csv`,
+         );
+ 
+-        return fileSet.has(trainFilePath) && fileSet.has(testFilePath);
++        const hasTrain = fileSet.has(trainFilePath);
++        const hasTest = fileSet.has(testFilePath);
++        
++        console.log("[modelDatasetSync] Checking split entry:", datasetName, {
++            trainFilePath, hasTrain,
++            testFilePath, hasTest
++        });
++
++        if (hasTrain && hasTest) return true;
++        
++        // Sometimes the folder from meta[5] is mismatched slightly, check just filename matching loosely
++        const hasTrainLoose = Array.from(fileSet).some(f => f.includes(metaTrain));
++        const hasTestLoose = Array.from(fileSet).some(f => f.includes(metaTest));
++        
++        if (hasTrainLoose && hasTestLoose) return true;
++
++        return false;
+     });

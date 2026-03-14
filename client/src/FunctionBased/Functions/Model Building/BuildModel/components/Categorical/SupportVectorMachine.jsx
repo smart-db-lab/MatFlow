@@ -1,4 +1,4 @@
-import { Input, Loading } from "@nextui-org/react";
+import { Input, Loading } from "../../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";
@@ -102,7 +102,6 @@ function SupportVectorMachine({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -119,7 +118,6 @@ function SupportVectorMachine({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -137,7 +135,6 @@ function SupportVectorMachine({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -153,7 +150,7 @@ function SupportVectorMachine({
               )}
               {loading && (
                 <div className="grid place-content-center h-full">
-                  <Loading size="lg" color={"success"}>
+                  <Loading size="lg">
                     Fetching Data...
                   </Loading>
                 </div>
@@ -184,7 +181,6 @@ function SupportVectorMachine({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="C"
             value={optimizedData.C || 1}
             onChange={(e) =>
@@ -199,7 +195,6 @@ function SupportVectorMachine({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Tolerance"
             value={optimizedData.tol || 0.001}
             onChange={(e) =>
@@ -214,7 +209,6 @@ function SupportVectorMachine({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Polinomial Degree"
             value={optimizedData.degree || 3}
             onChange={(e) =>

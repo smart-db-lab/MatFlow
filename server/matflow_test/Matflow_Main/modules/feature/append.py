@@ -7,8 +7,7 @@ def append (file):
     data=pd.DataFrame(file.get("file"))
     tmp = pd.DataFrame(file.get("file2"))
 
-    temp2 = tmp.append(data)
-    temp2 = temp2.reset_index()
+    temp2 = pd.concat([tmp, data], ignore_index=True)
 
     new_value =temp2 .to_json(orient="records")
     return JsonResponse(new_value, safe=False)

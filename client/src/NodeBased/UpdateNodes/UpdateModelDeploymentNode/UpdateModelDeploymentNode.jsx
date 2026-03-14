@@ -91,7 +91,7 @@ function UpdateModelDeploymentNode({ visible, setVisible, nodeId, csvData }) {
           <CloseIcon color="action" />
         </span>
         <h1 className="text-center font-medium tracking-wider text-3xl">
-          Edit Model Deployment Options
+          Edit Materials Property Prediction Options
         </h1>
 
         <div className="min-w-[600px] mx-auto w-full p-6 py-4 space-y-4">

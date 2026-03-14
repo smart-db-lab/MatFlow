@@ -1,15 +1,24 @@
 import styled from "@emotion/styled";
-import { TextField } from "@mui/material";
 import { Slider, Stack } from "@mui/material";
-import { Modal } from "@nextui-org/react";
+import { Modal } from "../muiCompat";
 import React, { useEffect, useState } from "react";
 import Plot from "react-plotly.js";
 import { useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import AgGridComponent from "../../../Components/AgGridComponent/AgGridComponent";
-import SingleDropDown from "../../../Components/SingleDropDown/SingleDropDown";
 import Docs from "../../../../Docs/Docs";
 import { apiService } from "../../../../services/api/apiService";
+import Autocomplete from "@mui/material/Autocomplete";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import {
+  FE_AUTOCOMPLETE_SX,
+  FE_ACTION_ROW_CLASS,
+  FE_CARD_CLASS,
+  FE_LABEL_CLASS,
+  FE_SECTION_TITLE_CLASS,
+  FE_SUB_LABEL_CLASS,
+} from "../feUi";
 
 function Cluster({
   csvData,
@@ -90,12 +99,12 @@ function Cluster({
   };
 
   return (
-    <div className="mt-8">
-      <div>
-        <h3 className="text-lg font-bold text-gray-900 tracking-wide">
+    <div className="w-full pt-1 pb-3">
+      <div className={FE_CARD_CLASS}>
+        <h3 className={FE_SECTION_TITLE_CLASS}>
           Number of classes
         </h3>
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-sm text-gray-500">
           Select how many class names you want to define.
         </p>
         <div className="mt-8">
@@ -121,7 +130,6 @@ function Cluster({
                 }
               }}
               valueLabelDisplay="on"
-              color="primary"
             />
             <span className="text-sm font-medium text-gray-700">10</span>
           </Stack>
@@ -135,7 +143,7 @@ function Cluster({
         {data.map((val, index) => {
           return (
             <div key={index} className="">
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-700">
+              <label className={FE_LABEL_CLASS}>
                 Class {index + 1} Name
               </label>
               <TextField
@@ -179,34 +187,45 @@ function Cluster({
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-4">
         {type === "function" && (
           <div className="w-full sm:w-auto sm:min-w-[150px] sm:max-w-[200px]">
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-700 mb-1.5">
-              Display Type
-            </p>
-            <SingleDropDown
-              columnNames={["Graph", "Table"]}
-              onValueChange={setDisplayType}
-              initValue={display_type}
+            <p className={FE_LABEL_CLASS}>Display Type</p>
+            <Autocomplete
+              size="small"
+              options={["Graph", "Table"]}
+              value={display_type || null}
+              onChange={(_, val) => setDisplayType(val || "Graph")}
+              renderInput={(params) => <TextField {...params} placeholder="Display type" />}
+              sx={FE_AUTOCOMPLETE_SX}
             />
           </div>
         )}
         <div className="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px]">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-700 mb-1.5">
-            Target Variable
-          </p>
-          <SingleDropDown
-            columnNames={allColumns}
-            onValueChange={setTargetVariable}
-            initValue={target_variable}
+          <p className={FE_LABEL_CLASS}>Target Variable</p>
+          <Autocomplete
+            size="small"
+            options={allColumns}
+            value={target_variable || null}
+            onChange={(_, val) => setTargetVariable(val || "")}
+            renderInput={(params) => <TextField {...params} placeholder="Target variable" />}
+            sx={FE_AUTOCOMPLETE_SX}
           />
         </div>
       </div>
       {type === "function" && (
-        <button
-          className="self-start border-2 px-6 tracking-wider bg-primary-btn text-white font-medium rounded-md py-2 mt-8"
-          onClick={handleSave}
-        >
-          Submit
-        </button>
+        <div className={FE_ACTION_ROW_CLASS}>
+          <div />
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            sx={{
+              backgroundColor: "#0D9488",
+              textTransform: "none",
+              fontWeight: 600,
+              "&:hover": { backgroundColor: "#0F766E" },
+            }}
+          >
+            Save Changes
+          </Button>
+        </div>
       )}
 
       <div className="mt-4">
@@ -226,14 +245,14 @@ function Cluster({
           ) : (
             <div className="mt-4 w-full">
               {graphTableData.table.length > 0 && (
-                <div
-                  className="ag-theme-alpine"
-                  style={{ height: "600px", width: "100%" }}
-                >
+                <div className="ag-theme-alpine" style={{ width: "100%" }}>
                   <AgGridComponent
                     rowData={graphTableData.table}
                     columnDefs={columnDefs}
                     download={true}
+                    height={600}
+                    minHeight={320}
+                    adaptiveHeight
                   />
                 </div>
               )}
@@ -268,7 +287,7 @@ function Cluster({
 export default Cluster;
 
 const PrettoSlider = styled(Slider)({
-  color: "#52af77",
+  color: "#0D9488",
   height: 8,
   "& .MuiSlider-track": {
     border: "none",
@@ -293,7 +312,7 @@ const PrettoSlider = styled(Slider)({
     width: 32,
     height: 32,
     borderRadius: "50% 50% 50% 0",
-    backgroundColor: "#52af77",
+    backgroundColor: "#0D9488",
     transformOrigin: "bottom left",
     transform: "translate(50%, -100%) rotate(-45deg) scale(0)",
     "&:before": { display: "none" },

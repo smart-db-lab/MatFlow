@@ -113,6 +113,7 @@ const nodeTypes = {
   Information: InformationNode,
   Statistics: StatisticsNode,
   Corelation: CorelationNode,
+  Correlation: CorelationNode,
   Group: GroupNode,
   Duplicate: DuplicateNode,
   Imputation: ImputationNode,
@@ -295,6 +296,7 @@ function EditorPage() {
           typeTarget === "Information" ||
           typeTarget === "Statistics" ||
           typeTarget === "Corelation" ||
+          typeTarget === "Correlation" ||
           typeTarget === "Group" ||
           typeTarget === "Duplicate" ||
           typeTarget === "Split Dataset" ||
@@ -383,11 +385,11 @@ function EditorPage() {
         ok = handleDatasetStatistics(rflow, params);
       }
 
-      if (typeSource === "Corelation" && typeTarget === "Table") {
+      if ((typeSource === "Corelation" || typeSource === "Correlation") && typeTarget === "Table") {
         ok = await handleDatasetCorrelation(rflow, params, "table");
       }
 
-      if (typeSource === "Corelation" && typeTarget === "Graph") {
+      if ((typeSource === "Corelation" || typeSource === "Correlation") && typeTarget === "Graph") {
         ok = await handleDatasetCorrelation(rflow, params, "graph");
       }
 

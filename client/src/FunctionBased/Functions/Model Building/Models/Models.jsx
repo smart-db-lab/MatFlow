@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { CircularProgress } from "@mui/material";
 import { AiOutlineDelete, AiOutlineDownload } from "react-icons/ai";
 import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -7,15 +8,26 @@ import {
   updateDataInIndexedDB,
 } from "../../../../util/indexDB";
 import { syncSplitAndModelCache } from "../../../../util/modelDatasetSync";
+import {
+  FE_SECTION_TITLE_CLASS,
+  FE_SUB_LABEL_CLASS,
+} from "../../Feature Engineering/feUi";
+import { apiService } from "../../../../services/api/apiService";
+import { getWorkspaceRootFromPath } from "../../../../util/utils";
 
 function Models({ csvData }) {
   const { projectId } = useParams();
+  const modelsDbName = projectId ? `models:${projectId}` : "models";
+  const splitDbName = projectId
+    ? `splitted_dataset:${projectId}`
+    : "splitted_dataset";
   const [allModels, setAllModels] = useState({});
   const [activeDatasets, setActiveDatasets] = useState([]);
   const [archivedDatasets, setArchivedDatasets] = useState([]);
   const [activeModelsByDataset, setActiveModelsByDataset] = useState({});
   const [archivedModelsByDataset, setArchivedModelsByDataset] = useState({});
   const [render, setRender] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const buildDatasetMap = (entries = []) => {
     const temp = {};
@@ -30,46 +42,71 @@ function Models({ csvData }) {
 
   useEffect(() => {
     const fetchData = async () => {
-      const synced = await syncSplitAndModelCache(projectId);
-      const rawModels = await fetchDataFromIndexedDB("models");
-      const activeMap = buildDatasetMap(synced.activeModelEntries || synced.modelEntries || []);
-      const archivedMap = buildDatasetMap(synced.archivedModelEntries || []);
-      const rawMap = buildDatasetMap(rawModels || []);
+      setIsLoading(true);
+      try {
+        const synced = await syncSplitAndModelCache(projectId);
+        const rawModels = await fetchDataFromIndexedDB(modelsDbName);
+        const activeMap = buildDatasetMap(
+          synced.activeModelEntries || synced.modelEntries || [],
+        );
+        const archivedMap = buildDatasetMap(synced.archivedModelEntries || []);
+        const rawMap = buildDatasetMap(rawModels || []);
 
-      setAllModels(rawMap);
-      setActiveModelsByDataset(activeMap);
-      setArchivedModelsByDataset(archivedMap);
-      setActiveDatasets(Object.keys(activeMap));
-      setArchivedDatasets(Object.keys(archivedMap));
+        setAllModels(rawMap);
+        setActiveModelsByDataset(activeMap);
+        setArchivedModelsByDataset(archivedMap);
+        setActiveDatasets(Object.keys(activeMap));
+        setArchivedDatasets(Object.keys(archivedMap));
+      } catch {
+        setAllModels({});
+        setActiveModelsByDataset({});
+        setArchivedModelsByDataset({});
+        setActiveDatasets([]);
+        setArchivedDatasets([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchData();
   }, [render, projectId]);
 
   const handleDelete = async (datasetName, modelName) => {
-    let allModels = await fetchDataFromIndexedDB("models");
-    const ind = allModels.findIndex((obj) => datasetName in obj);
-    if (ind !== -1) {
-      if (
-        Object.keys(allModels[ind][datasetName]).length > 0 &&
-        allModels[ind][datasetName]
-      ) {
-        if (allModels[ind][datasetName][modelName])
-          delete allModels[ind][datasetName][modelName];
+    try {
+      let allModels = await fetchDataFromIndexedDB(modelsDbName).catch(() => []);
+      if (!Array.isArray(allModels)) {
+        allModels = [];
+      }
+      const ind = allModels.findIndex((obj) => datasetName in obj);
+      if (ind !== -1) {
         if (
-          !(
-            Object.keys(allModels[ind][datasetName]).length > 0 &&
-            allModels[ind][datasetName]
-          )
+          Object.keys(allModels[ind][datasetName]).length > 0 &&
+          allModels[ind][datasetName]
         ) {
+          if (allModels[ind][datasetName][modelName]) {
+            delete allModels[ind][datasetName][modelName];
+          }
+          if (
+            !(
+              Object.keys(allModels[ind][datasetName]).length > 0 &&
+              allModels[ind][datasetName]
+            )
+          ) {
+            allModels = allModels.filter((val, i) => i !== ind);
+          }
+        } else {
           allModels = allModels.filter((val, i) => i !== ind);
         }
       } else {
-        allModels = allModels.filter((val, i) => i !== ind);
+        toast.info("Model not found.");
+        return;
       }
+      await updateDataInIndexedDB(modelsDbName, allModels);
+      setRender(!render);
+      toast.success(`Model deleted: "${modelName}".`);
+    } catch (error) {
+      toast.error("Failed to delete model.");
     }
-    await updateDataInIndexedDB("models", allModels);
-    setRender(!render);
   };
 
   const handleDownload = async (datasetName, modelName) => {
@@ -89,14 +126,100 @@ function Models({ csvData }) {
       }
 
       const blob = new Blob([bytes], { type: "application/octet-stream" });
-      const downloadUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = `${modelName}.joblib`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(downloadUrl);
+      const fileName = `${modelName}.joblib`;
+      const resolveWorkspaceRoot = async () => {
+        const splitEntries = await fetchDataFromIndexedDB(splitDbName).catch(
+          () => [],
+        );
+        const splitMeta = (splitEntries || [])
+          .map((entry) => {
+            if (Object.keys(entry || {})[0] === datasetName) {
+              return entry[datasetName];
+            }
+            return undefined;
+          })
+          .filter((value) => value !== undefined && value !== null)[0];
+        if (!Array.isArray(splitMeta) || !splitMeta[5]) return "";
+        return getWorkspaceRootFromPath(splitMeta[5]);
+      };
+
+      const persistInWorkspace = async () => {
+        if (!projectId) return false;
+        const workspaceRoot = await resolveWorkspaceRoot();
+        if (!workspaceRoot) return false;
+        const formData = new FormData();
+        formData.append("project_id", projectId);
+        formData.append("folder", `${workspaceRoot}/output/models`);
+        formData.append(
+          "file",
+          new File([blob], fileName, { type: "application/octet-stream" }),
+        );
+        await apiService.matflow.dataset.uploadFile(formData);
+        return true;
+      };
+
+      const supportsSavePicker =
+        typeof window !== "undefined" &&
+        typeof window.showSaveFilePicker === "function";
+      let localStatus = "started";
+
+      if (supportsSavePicker) {
+        try {
+          const picker = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [
+              {
+                description: "Joblib Model File",
+                accept: {
+                  "application/octet-stream": [".joblib"],
+                },
+              },
+            ],
+          });
+          const writable = await picker.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          localStatus = "saved";
+        } catch (pickerError) {
+          if (pickerError?.name === "AbortError") {
+            toast.info("Download cancelled.");
+            return;
+          }
+          throw pickerError;
+        }
+      }
+
+      if (!supportsSavePicker) {
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      }
+
+      let persistedInWorkspace = false;
+      try {
+        persistedInWorkspace = await persistInWorkspace();
+      } catch (_) {
+        persistedInWorkspace = false;
+      }
+
+      if (localStatus === "saved") {
+        toast.success(
+          persistedInWorkspace
+            ? `Model saved locally and in workspace: "${fileName}".`
+            : `Model saved locally: "${fileName}".`,
+        );
+      } else {
+        toast.success(
+          persistedInWorkspace
+            ? `Download started. Model also saved in workspace: "${fileName}".`
+            : `Download started: "${fileName}".`,
+        );
+      }
     } catch (error) {
       toast.error("Failed to download model.");
     }
@@ -123,11 +246,11 @@ function Models({ csvData }) {
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-[13px] font-semibold text-gray-800 uppercase tracking-wider">
+          <h3 className={FE_SECTION_TITLE_CLASS}>
             {title}
           </h3>
           {subtitle ? (
-            <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+            <p className="text-sm text-gray-600 mt-1">{subtitle}</p>
           ) : null}
         </div>
         <span
@@ -152,10 +275,10 @@ function Models({ csvData }) {
           </div>
         ) : (
           <div className="rounded-lg border border-gray-200 overflow-hidden">
-            <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-              <div className="col-span-4">Dataset</div>
-              <div className="col-span-5">Model</div>
-              <div className="col-span-3 text-right">Actions</div>
+            <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 px-4 py-2.5">
+              <div className={`col-span-4 ${FE_SUB_LABEL_CLASS} !mb-0`}>Dataset</div>
+              <div className={`col-span-5 ${FE_SUB_LABEL_CLASS} !mb-0`}>Model</div>
+              <div className={`col-span-3 text-right ${FE_SUB_LABEL_CLASS} !mb-0`}>Actions</div>
             </div>
 
             {rows.map((row, index) => (
@@ -183,14 +306,14 @@ function Models({ csvData }) {
 
                 <div className="col-span-3 flex items-center justify-end gap-2">
                   <button
-                    className="rounded-lg border border-blue-300 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors inline-flex items-center justify-center gap-1.5"
+                    className="rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors inline-flex items-center justify-center gap-1.5"
                     onClick={() => handleDownload(row.datasetName, row.modelName)}
                   >
                     Download
                     <AiOutlineDownload className="text-sm" />
                   </button>
                   <button
-                    className="rounded-lg border border-red-300 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors inline-flex items-center justify-center gap-1.5"
+                    className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors inline-flex items-center justify-center gap-1.5"
                     onClick={() => handleDelete(row.datasetName, row.modelName)}
                   >
                     Delete
@@ -206,6 +329,16 @@ function Models({ csvData }) {
   );
   };
   
+  if (isLoading)
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="flex flex-col items-center gap-2 text-gray-600">
+          <CircularProgress size={34} sx={{ color: "#0D9488" }} />
+          <p className="text-sm font-medium">Loading models...</p>
+        </div>
+      </div>
+    );
+
   if (
     activeDatasets.length === 0 &&
     archivedDatasets.length === 0

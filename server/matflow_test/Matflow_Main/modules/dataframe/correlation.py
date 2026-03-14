@@ -77,43 +77,120 @@ import numpy as np
 
 
 def display_heatmap(correlation_data):
-    decimal = 3
-    annot = True
-    correlation_data=pd.DataFrame(correlation_data)
-    correlation_data = correlation_data.drop(correlation_data.columns[-1], axis=1)
-    fig = go.Figure(data=go.Heatmap(
-        z=correlation_data.round(2),
-        x=correlation_data.columns,
-        y=correlation_data.columns,
-        colorscale='Viridis',
-        colorbar=dict(title='Correlation'),
-        hovertemplate='Value: %{z:.2f}<extra></extra>'  # Format for the hover text
-    ))
+    correlation_data = pd.DataFrame(correlation_data)
+    
+    # In DatasetCorrelation.jsx, normal rows might have column_name added at the end.
+    if "column_name" in correlation_data.columns:
+        correlation_data = correlation_data.drop(columns=["column_name"])
+    elif len(correlation_data.columns) > 0 and correlation_data.columns[-1] == "column_name":
+        correlation_data = correlation_data.drop(correlation_data.columns[-1], axis=1)
+    
+    columns = correlation_data.columns.tolist()
+    data = []
+    
+    # Fill data for ECharts heatmap, handling NaN/null values
+    for i in range(len(columns)):
+        for j in range(len(columns)):
+            try:
+                val = float(correlation_data.iloc[i, j])
+                # Replace NaN with 0 for display purposes
+                if pd.isna(val):
+                    val = 0.0
+                val = round(val, 3)
+            except (ValueError, TypeError):
+                # If conversion fails, use 0
+                val = 0.0
+            # Echarts heatmap requires [xIndex, yIndex, value]
+            data.append([j, i, val])
 
-    fig.update_layout(
-        title='Feature Correlation Heatmap',
-        xaxis=dict(title='Features'),
-        yaxis=dict(title='Features'),
-        hovermode='closest', # Set hovermode to 'closest' to show the closest data point value
-        width=1000, height=800,
-    )
+    # Calculate responsive grid sizing based on number of columns
+    num_cols = len(columns)
+    # Minimum spacing per column (pixels)
+    min_col_space = 60
+    # Estimate needed height
+    estimated_height = max(400, num_cols * min_col_space)
+    
+    option = {
+        "backgroundColor": "#ffffff",
+        "title": {
+            "text": "Feature Correlation Heatmap",
+            "left": "center",
+            "top": 12,
+            "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+        },
+        "tooltip": {
+            "position": "top",
+            "formatter": "{c}",
+            "textStyle": {"color": "#1f2937", "fontSize": 12},
+            "backgroundColor": "rgba(255,255,255,0.9)",
+            "borderColor": "#e5e7eb"
+        },
+        "grid": {
+            "top": "15%",
+            "bottom": "15%",
+            "left": "12%",
+            "right": "8%",
+            "containLabel": True
+        },
+        "xAxis": {
+            "type": "category",
+            "data": columns,
+            "splitArea": {"show": False},
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {
+                "color": "#1f2937",
+                "rotate": 45,
+                "interval": 0,
+                "fontSize": 11,
+                "overflow": "break",
+                "formatter": {
+                    "type": "function",
+                    "source": "function(v){ var s=String(v); return s.length>12 ? s.slice(0,11)+'…' : s; }"
+                }
+            }
+        },
+        "yAxis": {
+            "type": "category",
+            "data": columns,
+            "splitArea": {"show": False},
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {
+                "color": "#1f2937",
+                "fontSize": 11,
+                "formatter": {
+                    "type": "function",
+                    "source": "function(v){ var s=String(v); return s.length>12 ? s.slice(0,11)+'…' : s; }"
+                }
+            }
+        },
+        "visualMap": {
+            "min": -1,
+            "max": 1,
+            "calculable": True,
+            "orient": "horizontal",
+            "left": "center",
+            "bottom": "0%",
+            "inRange": {
+                "color": ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
+            }
+        },
+        "series": [{
+            "name": "Correlation",
+            "type": "heatmap",
+            "data": data,
+            "label": {
+                "show": True
+            },
+            "emphasis": {
+                "itemStyle": {
+                    "shadowBlur": 10,
+                    "shadowColor": "rgba(0, 0, 0, 0.5)"
+                }
+            }
+        }]
+    }
 
-    # Add annotations if desired
-    if annot:
-        for i in range(len(correlation_data.columns)):
-            for j in range(len(correlation_data.columns)):
-                value = correlation_data.iloc[j, i]  # Access value at (j, i) instead of (i, j)
-                if isinstance(value, (int, float, np.number)):
-                    fig.add_annotation(
-                        x=correlation_data.columns[i],
-                        y=correlation_data.columns[j],
-                        text=f'{float(value):.{decimal}f}',
-                        showarrow=False,
-                        font=dict(color='white' if float(value) > 0.5 else 'black')
-                    )
-
-    fig_json = pio.to_json(fig)
-    return JsonResponse(fig_json, safe=False)
+    return JsonResponse({"echarts": [option], "png": [], "svg": []})
 
 
 def display_pair(correlation_data, bg_gradient,feature1,feature2,higher_than,drop_perfect,convert_abs):

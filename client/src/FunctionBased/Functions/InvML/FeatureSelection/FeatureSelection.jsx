@@ -9,8 +9,13 @@ import BestOverallFeature from "./components/BestOverallFeature";
 import MutualInformation from "./components/MutualInformation";
 import ProgressiveFeature from "./components/ProgressiveFeature";
 import SelectKBest from "./components/SelectKBest";
-import { Modal } from "@nextui-org/react";
+import { Modal } from "../../Feature Engineering/muiCompat";
 import Docs from "../../../../Docs/Docs";
+import {
+  FE_CARD_CLASS,
+  FE_LABEL_CLASS,
+  FE_SECTION_TITLE_CLASS,
+} from "../../Feature Engineering/feUi";
 
 const SELECTION_METHOD = [
   "Best Overall Features",
@@ -31,9 +36,10 @@ function FeatureSelection({ csvData }) {
   const closeModal = () => setVisible(false);
 
   return (
-    <div className="mt-8">
-      <div>
-        <p>Target Variable</p>
+    <div className="w-full py-3">
+      <div className={FE_CARD_CLASS}>
+        <h2 className={FE_SECTION_TITLE_CLASS}>Feature Selection</h2>
+        <label className={FE_LABEL_CLASS}>Target Variable</label>
         <SingleDropDown
           columnNames={allColumnNames}
           onValueChange={(e) => {
@@ -48,20 +54,20 @@ function FeatureSelection({ csvData }) {
             );
           }}
         />
+        {target_variable && (
+          <div className="mt-4">
+            <label className={FE_LABEL_CLASS}>Selection Method</label>
+            <SingleDropDown
+              columnNames={SELECTION_METHOD}
+              initValue={selection_method}
+              onValueChange={(e) => {
+                setSelectionMethod(e);
+                dispatch(setMethodFeatureSelection(e));
+              }}
+            />
+          </div>
+        )}
       </div>
-      {target_variable && (
-        <div className="mt-4">
-          <p>Select feature selection method:</p>
-          <SingleDropDown
-            columnNames={SELECTION_METHOD}
-            initValue={selection_method}
-            onValueChange={(e) => {
-              setSelectionMethod(e);
-              dispatch(setMethodFeatureSelection(e));
-            }}
-          />
-        </div>
-      )}
       {target_variable && selection_method === SELECTION_METHOD[0] && (
         <BestOverallFeature csvData={csvData} />
       )}

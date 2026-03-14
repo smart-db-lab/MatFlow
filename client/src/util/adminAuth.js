@@ -10,6 +10,10 @@ const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 const ADMIN_SESSION_KEY = 'adminSession';
 const USER_EMAIL_KEY = 'userEmail';
+const CURRENT_USER_TTL_MS = 5 * 60 * 1000;
+let currentUserCache = null;
+let currentUserCacheAt = 0;
+let currentUserInFlight = null;
 
 /** Custom event name dispatched whenever auth state changes (login, logout, etc.) */
 export const AUTH_STATE_CHANGED_EVENT = 'auth:state-changed';
@@ -19,7 +23,39 @@ export const AUTH_STATE_CHANGED_EVENT = 'auth:state-changed';
  * Call this after any login, logout, or token change.
  */
 export const notifyAuthStateChanged = () => {
+  currentUserCache = null;
+  currentUserCacheAt = 0;
   window.dispatchEvent(new Event(AUTH_STATE_CHANGED_EVENT));
+};
+
+export const clearCurrentUserCache = () => {
+  currentUserCache = null;
+  currentUserCacheAt = 0;
+};
+
+export const getCurrentUserCached = async ({ force = false } = {}) => {
+  const now = Date.now();
+  if (!force && currentUserCache && now - currentUserCacheAt < CURRENT_USER_TTL_MS) {
+    return currentUserCache;
+  }
+
+  if (!force && currentUserInFlight) {
+    return currentUserInFlight;
+  }
+
+  currentUserInFlight = (async () => {
+    const data = await commonApi.auth.getCurrentUser();
+    const user = data?.user || data || null;
+    currentUserCache = user;
+    currentUserCacheAt = Date.now();
+    return user;
+  })();
+
+  try {
+    return await currentUserInFlight;
+  } finally {
+    currentUserInFlight = null;
+  }
 };
 
 /**
@@ -57,6 +93,7 @@ export const clearTokens = () => {
   localStorage.removeItem(ADMIN_SESSION_KEY);
   localStorage.removeItem(USER_EMAIL_KEY);
   localStorage.removeItem('userLoggedIn');
+  clearCurrentUserCache();
 };
 
 /**

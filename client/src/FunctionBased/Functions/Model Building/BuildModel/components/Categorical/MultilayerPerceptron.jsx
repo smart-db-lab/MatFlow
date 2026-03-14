@@ -1,4 +1,4 @@
-import { Input, Loading } from "@nextui-org/react";
+import { Input, Loading } from "../../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";
@@ -108,7 +108,6 @@ function MultilayerPerceptron({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -125,7 +124,6 @@ function MultilayerPerceptron({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -143,7 +141,6 @@ function MultilayerPerceptron({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -159,7 +156,7 @@ function MultilayerPerceptron({
               )}
               {loading && (
                 <div className="grid place-content-center h-full">
-                  <Loading size="lg" color={"success"}>
+                  <Loading size="lg">
                     Fetching Data...
                   </Loading>
                 </div>
@@ -190,7 +187,6 @@ function MultilayerPerceptron({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Hidden Layer Size"
             value={optimizedData.hidden_layer_sizes || 3}
             onChange={(e) =>
@@ -205,7 +201,6 @@ function MultilayerPerceptron({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Max Iteration"
             value={optimizedData.max_iter || 1000}
             onChange={(e) =>
@@ -220,7 +215,6 @@ function MultilayerPerceptron({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Alpha"
             value={optimizedData.alpha || 0.0001}
             onChange={(e) =>
@@ -235,7 +229,6 @@ function MultilayerPerceptron({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Learning Rate"
             value={optimizedData.learning_rate_init || 0.001}
             onChange={(e) =>
@@ -250,7 +243,6 @@ function MultilayerPerceptron({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Tolerance"
             value={optimizedData.tol || 0.001}
             onChange={(e) =>

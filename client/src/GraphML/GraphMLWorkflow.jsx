@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import Papa from 'papaparse';
+import * as Papa from 'papaparse';
 import StepNavigation from './components/StepNavigation';
 import TrainingView from './views/TrainingView';
 import PredictionView from './views/PredictionView';

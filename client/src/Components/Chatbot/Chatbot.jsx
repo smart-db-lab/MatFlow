@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import * as stats from 'simple-statistics';
 import { FiX, FiSend, FiMinimize2, FiTrash2, FiUpload } from 'react-icons/fi';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { setActiveFunction } from '../../Slices/SideBarSlice';
 import { apiService } from '../../services/api/apiService';
+import { sessionSetString } from '../../util/sessionProjectStorage';
 
 // Django Backend API configuration
 // Use empty string for same-origin requests via Vite proxy
@@ -22,6 +23,7 @@ const UPLOAD_API_URL = toAbsoluteUrl(API_BASE, UPLOAD_API_PATH);
 const Chatbot = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { projectId } = useParams();
   const activeCsvFile = useSelector((state) => state.uploadedFile.activeFile);
   const csvData = useSelector((state) => state.featureEngineering.file);
   const [isOpen, setIsOpen] = useState(false);
@@ -96,12 +98,12 @@ const Chatbot = () => {
     // Dataset operations
     'info': { label: 'Information', nodeId: '0-1' },
     'stats': { label: 'Statistics', nodeId: '0-2' },
-    'correlation': { label: 'Corelation', nodeId: '0-3' },
+    'correlation': { label: 'Correlation', nodeId: '0-3' },
     'duplicate': { label: 'Duplicate', nodeId: '0-4' },
     'group': { label: 'Group', nodeId: '0-5' },
     'gen_dataset': { label: 'Generate Dataset', nodeId: 'gen_dataset' },
-    'feature_eng': { label: 'Feature Engineering', nodeId: '2' },
-    'model_build': { label: 'Model Building', nodeId: '5' },
+    'feature_eng': { label: 'Materials Descriptor Generation', nodeId: '2' },
+    'model_build': { label: 'Generate Predictive Model', nodeId: '5' },
 
     // InvML operations - using exact nodeIds from FunctionTab
     'reverse_ml': { label: 'ReverseML', nodeId: '8-1' },
@@ -152,8 +154,8 @@ const Chatbot = () => {
     'custom_plot': { label: 'Custom Plot', nodeId: 'custom_plot', isPlot: true, plotType: 'custom' },
     'customplot': { label: 'Custom Plot', nodeId: 'custom_plot', isPlot: true, plotType: 'custom' },
 
-    'venn_diagram': { label: 'Venn Diagram', nodeId: 'venn_diagram', isPlot: true, plotType: 'venn' },
-    'venn': { label: 'Venn Diagram', nodeId: 'venn_diagram', isPlot: true, plotType: 'venn' }
+    'venn_diagram': { label: 'Bar Plot', nodeId: 'bar_plot', isPlot: true, plotType: 'bar' },
+    'venn': { label: 'Bar Plot', nodeId: 'bar_plot', isPlot: true, plotType: 'bar' }
   };
 
   // AI-powered function detection using natural language
@@ -453,13 +455,13 @@ const Chatbot = () => {
       'custom visualization': 'custom_plot',
 
       // Venn diagram operations
-      'venn diagram': 'venn_diagram',
-      'venn': 'venn_diagram',
-      'create venn diagram': 'venn_diagram',
-      'generate venn diagram': 'venn_diagram',
-      'make venn diagram': 'venn_diagram',
-      'plot venn': 'venn_diagram',
-      'venn visualization': 'venn_diagram'
+      'venn diagram': 'bar_plot',
+      'venn': 'bar_plot',
+      'create venn diagram': 'bar_plot',
+      'generate venn diagram': 'bar_plot',
+      'make venn diagram': 'bar_plot',
+      'plot venn': 'bar_plot',
+      'venn visualization': 'bar_plot'
     };
 
     // Find the best match
@@ -1098,7 +1100,7 @@ const Chatbot = () => {
       console.log('Navigating to dashboard...');
 
       // Navigate to dashboard first
-      navigate('/dashboard');
+      navigate('/matflow/dashboard');
 
       // Wait for navigation to complete, then simulate the exact mouse click
       setTimeout(() => {
@@ -1136,7 +1138,7 @@ const Chatbot = () => {
             // If no file is uploaded, the function tree won't be rendered
             // So we'll use direct dispatch instead
             dispatch(setActiveFunction(functionLabel));
-            localStorage.setItem('activeFunction', functionLabel);
+            sessionSetString('activeFunction', projectId, functionLabel);
             console.log('Direct dispatch completed for:', functionLabel);
             return;
           }
@@ -1179,7 +1181,7 @@ const Chatbot = () => {
           // Method 2: Direct Redux dispatch (this should always work)
           console.log('Using direct Redux dispatch for reliable selection...');
           dispatch(setActiveFunction(functionLabel));
-          localStorage.setItem('activeFunction', functionLabel);
+          sessionSetString('activeFunction', projectId, functionLabel);
 
           // Method 3: Force a re-render by updating the selected state
           setTimeout(() => {

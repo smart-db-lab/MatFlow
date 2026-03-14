@@ -95,11 +95,13 @@ function App() {
           <Route path="/admin-dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/matflow-admin" element={<AdminRoute><MatflowAdminDashboard /></AdminRoute>} />
           <Route path="/add-article" element={<AdminRoute><AddArticle /></AdminRoute>} />
-          <Route path="/projects" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/projects" element={<Navigate to="/matflow/dashboard" replace />} />
           <Route path="/profile" element={<AuthRoute><ProfileView standalone /></AuthRoute>} />
         </Route>
-        <Route path="/dashboard" element={<AuthRoute><Dashboard /></AuthRoute>} />
-        <Route path="/dashboard/:projectId" element={<AuthRoute><Dashboard /></AuthRoute>} />
+        <Route path="/matflow/dashboard" element={<AuthRoute><Dashboard /></AuthRoute>} />
+        <Route path="/matflow/dashboard/:projectId" element={<AuthRoute><Dashboard /></AuthRoute>} />
+        <Route path="/dashboard" element={<Navigate to="/matflow/dashboard" replace />} />
+        <Route path="/dashboard/:projectId" element={<Navigate to="/matflow/dashboard/:projectId" replace />} />
         <Route path="/temp" element={<TempPage />} />
         <Route
           path="/editor"

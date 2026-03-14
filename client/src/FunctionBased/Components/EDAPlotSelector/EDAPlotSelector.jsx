@@ -9,7 +9,6 @@ import {
   TrendingUp,
   ChartLine,
   SlidersHorizontal,
-  CircleDot,
 } from 'lucide-react';
 
 const PLOT_TYPES = [
@@ -21,8 +20,7 @@ const PLOT_TYPES = [
   "Scatter Plot",
   "Reg Plot",
   "Line Plot",
-  "Custom Plot",
-  "Venn Diagram"
+  "Custom Plot"
 ];
 
 const plotIcons = {
@@ -35,12 +33,11 @@ const plotIcons = {
   "Reg Plot": TrendingUp,
   "Line Plot": ChartLine,
   "Custom Plot": SlidersHorizontal,
-  "Venn Diagram": CircleDot,
 };
 
 function EDAPlotSelector({ selectedPlotType, onPlotTypeChange }) {
   return (
-    <div className="w-full pt-3 mb-3 pb-2 border-b border-gray-200">
+    <div className="w-full pt-4 mb-4 pb-3 border-b border-gray-300">
       <div className="flex flex-wrap gap-2">
         {PLOT_TYPES.map((plotType) => {
           const Icon = plotIcons[plotType];
@@ -49,10 +46,10 @@ function EDAPlotSelector({ selectedPlotType, onPlotTypeChange }) {
           <button
             key={plotType}
             onClick={() => onPlotTypeChange(plotType)}
-            className={`h-9 px-3.5 rounded-lg text-sm font-medium leading-none transition-all duration-200 inline-flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 inline-flex items-center gap-1.5 ${
               isActive
                 ? "bg-[#0D9488] text-white shadow-md"
-                : "bg-white text-[#0D9488] border border-gray-300 hover:bg-[#0D9488]/10 hover:border-[#0D9488]"
+                : "bg-white text-[#0F766E] border border-gray-300 hover:bg-[#0D9488]/10 hover:border-[#0D9488]"
             }`}
           >
             {Icon ? (

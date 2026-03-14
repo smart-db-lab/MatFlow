@@ -1,4 +1,4 @@
-import { Input, Loading } from "@nextui-org/react";
+import { Input, Loading } from "../../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";

@@ -15,6 +15,13 @@ def process_smiles_structure_batch(
     image_format: str,
     max_images: int
 ):
+    try:
+        normalized_size = int(image_size)
+    except (TypeError, ValueError):
+        normalized_size = 300
+    if normalized_size <= 0:
+        normalized_size = 300
+
     total = len(dataset)
     download_links = {}
     preview_images = []
@@ -24,7 +31,7 @@ def process_smiles_structure_batch(
 
     for idx, row in enumerate(dataset, start=1):
         smiles = row.get(smiles_column)
-        img_bytes = smiles_to_png(smiles)
+        img_bytes = smiles_to_png(smiles, (normalized_size, normalized_size))
         if img_bytes:
             filename = f"{task_folder}/{idx}.{image_format}"
             default_storage.save(filename, ContentFile(img_bytes))

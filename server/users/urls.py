@@ -9,6 +9,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("register/", UserRegistrationView.as_view(), name="user-list-create"),
+    path("signup/", signup, name="simple-signup"),
+    path("verify-code/", verify_code, name="verify-code"),
     path("users/<int:pk>/", ProfileDetailAPIView.as_view(), name="user-detail"),
     path("users/me/", ProfileMeAPIView.as_view(), name="user-me"),
     path("profile-info/", ProfileDetailAPIView.as_view(), name="user-detail"),

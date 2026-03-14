@@ -57,6 +57,7 @@ const MultipleDropDown = ({
     <div className="mt-1">
       <Autocomplete
         multiple
+        fullWidth
         limitTags={2}
         id="checkboxes-tags-demo"
         options={[selectAllLabel, ...columnNames]} // Dynamic label for "Select All"
@@ -81,13 +82,54 @@ const MultipleDropDown = ({
           </li>
         )}
         size="small"
+        sx={{
+          '& .MuiAutocomplete-inputRoot': {
+            fontSize: '0.95rem',
+            fontFamily: 'Inter, sans-serif',
+          },
+          '& .MuiAutocomplete-clearIndicator, & .MuiAutocomplete-popupIndicator': {
+            color: '#6b7280',
+          },
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              mt: 0.5,
+              borderRadius: '10px',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 10px 20px rgba(15, 23, 42, 0.08)',
+            },
+          },
+          listbox: {
+            sx: {
+              py: 0.5,
+              '& .MuiAutocomplete-option': {
+                minHeight: 36,
+                px: 1.25,
+                py: 0.65,
+                fontSize: '0.92rem',
+                fontWeight: 500,
+                color: '#111827',
+              },
+              '& .MuiAutocomplete-option.Mui-focused': {
+                backgroundColor: '#f0fdfa',
+              },
+              '& .MuiAutocomplete-option[aria-selected="true"]': {
+                backgroundColor: '#e6fffb',
+              },
+              '& .MuiAutocomplete-option[aria-selected="true"].Mui-focused': {
+                backgroundColor: '#ccfbf1',
+              },
+            },
+          },
+        }}
         renderInput={(params) => (
           <TextField
             {...params}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: '12px',
-                minHeight: '40px',
+                minHeight: '42px',
                 backgroundColor: '#ffffff',
                 '& fieldset': {
                   borderColor: '#d1d5db',
@@ -108,6 +150,8 @@ const MultipleDropDown = ({
                 margin: '2px',
                 height: '24px',
                 borderRadius: '8px',
+                fontSize: '0.78rem',
+                fontWeight: 500,
               },
             }}
           />

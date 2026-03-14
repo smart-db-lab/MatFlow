@@ -42,7 +42,7 @@ def creation(file):
 		return add_new(data,var,add_pipeline,file)
 
 def add_new(data,var,add_pipeline,file):
-
+	column_name =file.get("column_name",var) 
 	temp = data.copy(deep=True)
 	file=file.get("data")
 	slt_=file.get("select_methods")
@@ -51,9 +51,9 @@ def add_new(data,var,add_pipeline,file):
 	else:
 		col_name=file.get('select_field')
 	if slt_ == 'Input String':
-		temp[var]=value
+		temp[column_name]=value
 	else:
-		temp[var]=temp[col_name]
+		temp[column_name]=temp[col_name]
 	df = temp.to_dict(orient="records")
 	return JsonResponse(df, safe=False)
 

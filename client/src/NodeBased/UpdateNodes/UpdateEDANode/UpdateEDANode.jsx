@@ -16,7 +16,6 @@ import PiePlot from "./plots/PiePlot";
 import RegPlot from "./plots/RegPlot";
 import ScatterPlot from "./plots/ScatterPlot";
 import ViolinPlot from "./plots/ViolinPlot";
-import VennDiagram from "../../../FunctionBased/Functions/EDA/VennDiagram.jsx";
 const PLOT = [
   "Bar Plot",
   "Pie Plot",
@@ -26,8 +25,7 @@ const PLOT = [
   "Scatter Plot",
   "Reg Plot",
   "Line Plot",
-  "Custom Plot",
-  "Venn Diagram"
+  "Custom Plot"
 ];
 
 function UpdateEDANode({ visible, setVisible, csvData }) {
@@ -75,7 +73,7 @@ function UpdateEDANode({ visible, setVisible, csvData }) {
           <CloseIcon color="action" />
         </span>
         <h1 className="text-center font-medium tracking-wider text-3xl">
-          Edit EDA Options
+          Edit Visual Data Analysis Options
         </h1>
         <div className="min-w-[500px] mx-auto w-full p-6 py-4">
           <div className="w-full">
@@ -129,9 +127,6 @@ function UpdateEDANode({ visible, setVisible, csvData }) {
           )}
           {plotType === "Histogram" && (
             <Histogram csvData={csvData} setPlotOption={setPlotOption} />
-          )}
-          {plotType === "Venn Diagram" && (
-            <VennDiagram csvData={csvData} setPlotOption={setPlotOption} />
           )}
         </div>
         <div className="sticky bottom-0 bg-white border-t-2 shadow-md border-gray-200 flex items-center gap-4 w-full justify-end px-6 py-3 pt-6 mt-4">

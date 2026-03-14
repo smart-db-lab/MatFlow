@@ -1,6 +1,6 @@
 import styled from "@emotion/styled";
 import { Slider, Stack } from "@mui/material";
-import { Checkbox } from "@nextui-org/react";
+import { Checkbox } from "../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import Plot from "react-plotly.js";
 import { useSelector } from "react-redux";

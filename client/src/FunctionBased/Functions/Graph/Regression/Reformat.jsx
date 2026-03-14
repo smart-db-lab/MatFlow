@@ -40,7 +40,7 @@ import {
   KeyboardArrowRight
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
-import Papa from "papaparse";
+import * as Papa from "papaparse";
 
 const StyledCard = styled(Card)(({ theme }) => ({
   padding: theme.spacing(4),

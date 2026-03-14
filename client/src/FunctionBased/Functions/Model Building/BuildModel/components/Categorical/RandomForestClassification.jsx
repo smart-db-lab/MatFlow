@@ -1,4 +1,4 @@
-import { Checkbox, Input, Loading } from "@nextui-org/react";
+import { Checkbox, Input, Loading } from "../../../../Feature Engineering/muiCompat";
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getAuthHeaders } from "../../../../../../util/adminAuth";
@@ -105,7 +105,6 @@ function RandomForestClassification({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -122,7 +121,6 @@ function RandomForestClassification({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -140,7 +138,6 @@ function RandomForestClassification({
                   }
                   fullWidth
                   bordered
-                  color="success"
                   type="number"
                 />
               </div>
@@ -156,7 +153,7 @@ function RandomForestClassification({
               )}
               {loading && (
                 <div className="grid place-content-center h-full">
-                  <Loading size="lg" color={"success"}>
+                  <Loading size="lg">
                     Fetching Data...
                   </Loading>
                 </div>
@@ -187,7 +184,6 @@ function RandomForestClassification({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Number of Estimators"
             value={optimizedData.n_estimators || 100}
             onChange={(e) =>
@@ -202,7 +198,6 @@ function RandomForestClassification({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Min. Samples Split"
             value={optimizedData.min_samples_split || 2}
             onChange={(e) =>
@@ -217,7 +212,6 @@ function RandomForestClassification({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Min. Samples Leaf"
             value={optimizedData.min_samples_leaf || 2}
             onChange={(e) =>
@@ -232,7 +226,6 @@ function RandomForestClassification({
             type="number"
             fullWidth
             bordered
-            color="success"
             label="Random State"
             value={optimizedData.random_state || 0}
             onChange={(e) =>
@@ -280,7 +273,6 @@ function RandomForestClassification({
             />
           </div>
           <Checkbox
-            color="success"
             isSelected={!!optimizedData.auto}
             onChange={(e) =>
               setOptimizedData({
