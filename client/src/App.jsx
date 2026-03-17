@@ -19,6 +19,12 @@ import ProfileView from "./Pages/ProfileView";
 import VerifyEmail from "./Pages/VerifyEmail";
 import { AdminRoute, AuthRoute } from "./Components/ProtectedRoute";
 
+// New Scientist Layout & Pages
+import ScientistLayout from "./Components/Layout/ScientistLayout";
+import DatasetPage from "./Pages/DataLab/DatasetPage";
+import ForwardPage from "./Pages/ForwardGen/ForwardPage";
+import InversePage from "./Pages/InverseGen/InversePage";
+
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -98,8 +104,18 @@ function App() {
           <Route path="/projects" element={<Navigate to="/dashboard" replace />} />
           <Route path="/profile" element={<AuthRoute><ProfileView standalone /></AuthRoute>} />
         </Route>
+        
         <Route path="/dashboard" element={<AuthRoute><Dashboard /></AuthRoute>} />
         <Route path="/dashboard/:projectId" element={<AuthRoute><Dashboard /></AuthRoute>} />
+        
+        {/* New Lab Interface Routes */}
+        <Route path="/lab" element={<AuthRoute><ScientistLayout /></AuthRoute>}>
+          <Route index element={<Navigate to="data" replace />} />
+          <Route path="data" element={<DatasetPage />} />
+          <Route path="forward" element={<ForwardPage />} />
+          <Route path="inverse" element={<InversePage />} />
+        </Route>
+
         <Route path="/temp" element={<TempPage />} />
         <Route
           path="/editor"

@@ -75,7 +75,7 @@ function ScatterPlot({ csvData, splitMode = false, onPlotGenerated, onError, onL
   };
 
   useEffect(() => {
-    if (activeCsvFile && activeCsvFile.name) {
+    if (csvData && csvData.length > 0) {
       const getData = async () => {
         const tempStringColumn = [];
         const tempNumberColumn = [];
@@ -93,7 +93,7 @@ function ScatterPlot({ csvData, splitMode = false, onPlotGenerated, onError, onL
 
       getData();
     }
-  }, [activeCsvFile, csvData]);
+  }, [csvData]);
 
   const handleGenerate = async () => {
     try {

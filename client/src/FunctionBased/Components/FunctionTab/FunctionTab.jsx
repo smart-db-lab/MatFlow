@@ -90,9 +90,9 @@ const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
 
 const iconColorForLabel = (label = '') => {
   const key = label.toLowerCase();
-  if (key.includes('forwardml')) return '#2563eb';
-  if (key.includes('reverseml')) return '#ea580c';
-  if (key.includes('dataset')) return '#0D9488';
+  if (key.includes('property prediction') || key.includes('forwardml')) return '#2563eb';
+  if (key.includes('material generation') || key.includes('reverseml')) return '#ea580c';
+  if (key.includes('dataset explorer') || key.includes('dataset') || key.includes('eda')) return '#0D9488';
   if (key.includes('model')) return '#2563eb';
   if (key.includes('feature')) return '#7c3aed';
   if (key.includes('time')) return '#0284c7';
@@ -104,20 +104,20 @@ const iconColorForLabel = (label = '') => {
   if (key.includes('group')) return '#9333ea';
   if (key.includes('information')) return '#4f46e5';
   if (key.includes('duplicate')) return '#dc2626';
-  if (key.includes('display')) return '#0d9488';
-  if (key.includes('eda')) return '#14b8a6';
+  if (key.includes('data table')) return '#0d9488';
+  if (key.includes('data preparation')) return '#14b8a6';
   return '#6b7280';
 };
 
 const iconBadgeForLabel = (label = '') => {
   const key = label.toLowerCase();
-  if (key.includes('forwardml') || key.includes('model')) {
+  if (key.includes('property prediction') || key.includes('forwardml') || key.includes('model')) {
     return { bg: '#eff6ff', border: '#bfdbfe', color: '#2563eb' };
   }
-  if (key.includes('feature')) {
+  if (key.includes('feature') || key.includes('data preparation')) {
     return { bg: '#f5f3ff', border: '#ddd6fe', color: '#7c3aed' };
   }
-  if (key.includes('reverseml') || key.includes('smiles') || key.includes('pso')) {
+  if (key.includes('material generation') || key.includes('reverseml') || key.includes('smiles') || key.includes('pso')) {
     return { bg: '#fff7ed', border: '#fed7aa', color: '#ea580c' };
   }
   if (key.includes('eda') || key.includes('statistics') || key.includes('corelation')) {
@@ -126,7 +126,7 @@ const iconBadgeForLabel = (label = '') => {
   if (key.includes('final')) {
     return { bg: '#ecfdf5', border: '#a7f3d0', color: '#0f766e' };
   }
-  if (key.includes('dataset') || key.includes('display') || key.includes('information') || key.includes('group')) {
+  if (key.includes('dataset explorer') || key.includes('dataset') || key.includes('data table') || key.includes('information') || key.includes('group')) {
     return { bg: '#f0fdfa', border: '#99f6e4', color: '#0D9488' };
   }
   return { bg: '#f8fafc', border: '#e2e8f0', color: '#64748b' };
@@ -135,11 +135,11 @@ const iconBadgeForLabel = (label = '') => {
 const getNodeIcon = (label = '', hasChildren = false) => {
   const key = label.toLowerCase();
 
-  if (key.includes('dataset')) return <MdOutlineDataset size={18} />;
-  if (key.includes('eda')) return <SlMagnifier size={17} />;
+  if (key.includes('dataset explorer') || key.includes('dataset')) return <MdOutlineDataset size={18} />;
+  if (key.includes('eda') || key.includes('data preparation')) return <SlMagnifier size={17} />;
   if (key.includes('feature')) return <RxGear size={17} />;
-  if (key.includes('forwardml') || key.includes('model building')) return <TbBrain size={18} />;
-  if (key.includes('reverseml')) return <HiOutlinePuzzle size={18} />;
+  if (key.includes('property prediction') || key.includes('forwardml') || key.includes('model building')) return <TbBrain size={18} />;
+  if (key.includes('material generation') || key.includes('reverseml')) return <HiOutlinePuzzle size={18} />;
   if (key.includes('final')) return <HiOutlineDocumentReport size={17} />;
   if (key.includes('split')) return <PiGraph size={16} />;
   if (key.includes('build')) return <RxRocket size={16} />;
@@ -149,29 +149,25 @@ const getNodeIcon = (label = '', hasChildren = false) => {
   if (key.includes('time')) return <AiOutlineLineChart size={16} />;
   if (key.includes('information')) return <HiOutlineDocumentReport size={16} />;
   if (key.includes('statistics')) return <AiOutlineLineChart size={16} />;
+  if (key.includes('visualizations')) return <PiGraph size={16} />;
   if (key.includes('corelation')) return <PiGraph size={16} />;
   if (key.includes('duplicate')) return <HiOutlineDocumentReport size={16} />;
   if (key.includes('group')) return <HiOutlinePuzzle size={16} />;
-  if (key.includes('display')) return <HiOutlineDocumentReport size={16} />;
+  if (key.includes('data table')) return <HiOutlineDocumentReport size={16} />;
   if (key.includes('smiles') || key.includes('pso')) return <HiOutlinePuzzle size={16} />;
   if (hasChildren) return <PiGraph size={16} />;
   return <AiOutlineLineChart size={16} />;
 };
 
-// Updated tree data structure with 'id' instead of 'key' for MUI X Tree View
 const functionTreeData = [
   {
     id: '0',
-    label: 'Dataset',
+    label: 'Dataset Explorer',
     icon: <MdOutlineDataset size={18} />,
     children: [
       {
         id: '0-0',
-        label: 'Display',
-      },
-      {
-        id: '0-1',
-        label: 'Information',
+        label: 'Data Table',
       },
       {
         id: '0-2',
@@ -179,39 +175,17 @@ const functionTreeData = [
       },
       {
         id: '0-3',
-        label: 'Corelation',
+        label: 'Visualizations',
       },
       {
-        id: '0-4',
-        label: 'Duplicate',
-      },
-      {
-        id: '0-5',
-        label: 'Group',
+        id: '0-6',
+        label: 'Data Preparation',
       },
     ],
   },
   {
-    id: '1',
-    label: 'EDA',
-    icon: <SlMagnifier size={17} />,
-    children: [],
-  },
-  {
     id: '2',
-    label: 'Feature Engineering',
-    icon: <RxGear size={17} />,
-    children: [], // No dropdown: access via tag buttons in the right panel
-  },
-  {
-    id: '3',
-    label: 'Final Dataset',
-    icon: <HiOutlineDocumentReport size={17} />,
-    children: [],
-  },
-  {
-    id: '5',
-    label: 'ForwardML',
+    label: 'Property Prediction',
     icon: <TbBrain size={18} />,
     children: [
       {
@@ -252,17 +226,13 @@ const functionTreeData = [
   },
   {
     id: '8',
-    label: 'ReverseML',
+    label: 'Material Generation',
     icon: <HiOutlinePuzzle size={18} />,
     children: [
       {
         id: '8-2',
         label: 'PSO',
       },
-      // {
-      //   id: '8-3',
-      //   label: 'Feature Selection',
-      // },
       {
         id: '8-4',
         label: 'SMILES Generation',
@@ -284,6 +254,12 @@ const functionTreeData = [
         label: 'SMILES Structure',
       },
     ],
+  },
+  {
+    id: '3',
+    label: 'Final Dataset',
+    icon: <HiOutlineDocumentReport size={17} />,
+    children: [],
   },
 ];
 
@@ -410,12 +386,12 @@ function FunctionTab() {
 
   const handleItemClick = (event, nodeId) => {
     const label = getLabelFromNodeId(nodeId);
-    
+
     if (!label) return;
 
     // Check if this node has children
     const isParentNode = hasChildren(nodeId);
-    
+
     if (isParentNode) {
       // For parent nodes, don't stop propagation - let TreeView handle expansion
       // Don't select parent nodes, just expand them
@@ -426,7 +402,7 @@ function FunctionTab() {
       setSelected(nodeId);
       dispatch(setActiveFunction(label));
       localStorage.setItem('activeFunction', label);
-      
+
       // Ensure only the selected leaf's branch stays expanded
       const parentIds = getAncestorPath(nodeId);
       setExpanded(parentIds);

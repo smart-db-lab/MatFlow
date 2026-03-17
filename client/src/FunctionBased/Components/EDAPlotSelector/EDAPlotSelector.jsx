@@ -66,7 +66,7 @@ function EDAPlotSelector({ selectedPlotType, onPlotTypeChange }) {
                 <Icon size={13} strokeWidth={2} />
               </span>
             ) : null}
-            {plotType}
+            {plotType === "Reg Plot" ? "Regression Plot" : plotType}
           </button>
           );
         })}

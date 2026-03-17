@@ -43,9 +43,10 @@ import SMILEStoIUPAC from '../../Functions/InvML/SMILEStoIUPAC/SMILEStoIUPAC';
 import SMILESToSyntheticScore from '../../Functions/InvML/SMILESToSAS/SMILESToSyntheticScore';
 import SMILESToDFT from '../../Functions/InvML/SMILESToDFT/SMILESToDFT';
 import SMILESMolecularStructure from '../../Functions/InvML/SMILESMolecularStructure/SMILESMolecularStructure';
-import VennDiagram from '../../Functions/EDA/VennDiagram.jsx';
 import FeatureSelection from '../../Functions/InvML/FeatureSelection/FeatureSelection';
 import ConfirmDeleteModal from '../../../Components/ConfirmDeleteModal';
+import DashboardHome from '../DashboardHome/DashboardHome';
+import DatasetExplorerUI from '../../Functions/DatasetExplorer/DatasetExplorerUI';
 
 const STORAGE_KEY = 'mlflow_projects';
 const GUEST_PROJECTS_KEY = 'mlflow_guest_projects';
@@ -101,7 +102,7 @@ function DashBoardRight({ projectName, projectId, openModal, onModalOpened }) {
             return;
           }
         }
-      } catch (_) {}
+      } catch (_) { }
       setProjects([]);
       return;
     }
@@ -133,7 +134,7 @@ function DashBoardRight({ projectName, projectId, openModal, onModalOpened }) {
             })));
           }
         }
-      } catch (_) {}
+      } catch (_) { }
     }
   };
 
@@ -189,7 +190,7 @@ function DashBoardRight({ projectName, projectId, openModal, onModalOpened }) {
       setEditingId(null);
       setShowCreateModal(false);
       navigate(`/dashboard/${newProject.id}`);
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const handleSaveEdit = async () => {
@@ -338,7 +339,7 @@ function DashBoardRight({ projectName, projectId, openModal, onModalOpened }) {
   const showBlankProjectPanel = !isLoading && Boolean(projectId) && (!activeFile || !activeFunction);
 
   return (
-    <div 
+    <div
       className="flex-grow h-full overflow-y-auto px-6 bg-white"
     >
       {/* Home bar with integrated breadcrumb */}
@@ -381,76 +382,22 @@ function DashBoardRight({ projectName, projectId, openModal, onModalOpened }) {
 
       {!isLoading && activeFunction && activeFile && hasCsvRows ? (
         <>
-          {csvData &&
-            activeFunction &&
-            (activeFunction === 'Display' || activeFunction === 'Dataset') && (
-              <DatasetDisplay csvData={csvData} />
-            )}
-          {csvData && activeFunction && activeFunction === 'Information' && (
-            <DatasetInformation csvData={csvData} />
+          {csvData && activeFunction && [
+            'Dataset Explorer', 'Data Table', 'Display', 'Information', 'Statistics', 'Corelation', 'Duplicate', 'Group',
+            'EDA', 'Visualizations', 'Bar Plot', 'Pie Plot', 'Box Plot', 'Histogram', 'Violin Plot', 'Scatter Plot', 'Reg Plot', 'Line Plot', 'Venn Diagram', 'Custom Plot',
+            'Data Preparation', 'Feature Engineering', 'Add/Modify', 'Change Dtype', 'Alter Field Name', 'Imputation', 'Encoding', 'Scaling', 'Drop Column', 'Drop Rows', 'Append Dataset', 'Merge Dataset', 'Feature Selection', 'Cluster', 'Best Scaler'
+          ].includes(activeFunction) && (
+            <DatasetExplorerUI 
+              csvData={csvData} 
+              setCsvData={setCsvData} 
+              activeFunction={
+                ['Data Table', 'Display', 'Dataset Explorer', 'Dataset'].includes(activeFunction) ? 'Data Table' :
+                ['Information', 'Statistics', 'Corelation', 'Duplicate', 'Group'].includes(activeFunction) ? 'Statistics' :
+                ['Visualizations', 'EDA', 'Bar Plot', 'Pie Plot', 'Box Plot', 'Histogram', 'Violin Plot', 'Scatter Plot', 'Reg Plot', 'Line Plot', 'Venn Diagram', 'Custom Plot'].includes(activeFunction) ? 'Visualizations' :
+                'Data Preparation'
+              }
+            />
           )}
-          {csvData && activeFunction && activeFunction === 'Statistics' && (
-            <DatasetStatistics csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Corelation' && (
-            <DatasetCorrelation csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Duplicate' && (
-            <DatasetDuplicates csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Group' && (
-            <DatasetGroup csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'EDA' && (
-            <UnifiedEDA csvData={csvData} />
-          )}
-          {csvData &&
-            activeFunction &&
-            activeFunction === 'Bar Plot' && (
-              <BarPlot csvData={csvData} />
-            )}
-          {csvData && activeFunction && activeFunction === 'Pie Plot' && (
-            <PiePlot csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Box Plot' && (
-            <BoxPlot csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Histogram' && (
-            <Histogram csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Violin Plot' && (
-            <ViolinPlot csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Scatter Plot' && (
-            <ScatterPlot csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Reg Plot' && (
-            <RegPlot csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Line Plot' && (
-            <LinePlot csvData={csvData} />
-          )}
-          {csvData && activeFunction && activeFunction === 'Venn Diagram' && (
-            <VennDiagram csvData={csvData} />
-          )}
-          {csvData &&
-            activeFunction &&
-            (activeFunction === 'Add/Modify' ||
-              activeFunction === 'Feature Engineering' ||
-              activeFunction === 'Change Dtype' ||
-              activeFunction === 'Alter Field Name' ||
-              activeFunction === 'Imputation' ||
-              activeFunction === 'Encoding' ||
-              activeFunction === 'Scaling' ||
-              activeFunction === 'Drop Column' ||
-              activeFunction === 'Drop Rows' ||
-              activeFunction === 'Append Dataset' ||
-              activeFunction === 'Merge Dataset' ||
-              activeFunction === 'Feature Selection' ||
-              activeFunction === 'Cluster' ||
-              activeFunction === 'Best Scaler') && (
-              <UnifiedFeatureEngineering csvData={csvData} />
-            )}
           {csvData &&
             activeFunction &&
             (activeFunction === 'Split Dataset' ||
@@ -487,11 +434,11 @@ function DashBoardRight({ projectName, projectId, openModal, onModalOpened }) {
             activeFunction === 'SMILES to Synthetic Score' && (
               <SMILESToSyntheticScore csvData={csvData} />
             )}
-                {csvData &&
-                  activeFunction &&
-                  activeFunction === 'SMILES to DFT' && (
-                    <SMILESToDFT csvData={csvData} />
-                  )}
+          {csvData &&
+            activeFunction &&
+            activeFunction === 'SMILES to DFT' && (
+              <SMILESToDFT csvData={csvData} />
+            )}
           {csvData &&
             activeFunction &&
             activeFunction === 'SMILES Structure' && (
@@ -523,87 +470,15 @@ function DashBoardRight({ projectName, projectId, openModal, onModalOpened }) {
           </div>
         </div>
       ) : showWorkspaceScreen ? (
-        <div className="h-[70vh] flex items-center justify-center">
-          <div className="w-full max-w-4xl">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              <div className="w-full max-w-md justify-self-center space-y-2">
-                <button
-                  type="button"
-                  onClick={openCreate}
-                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-[#eef9ff] text-[#0D9488] flex items-center justify-center">
-                      <PlusCircle size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Create Project</p>
-                      <p className="text-xs text-gray-500">Set up a new project from scratch.</p>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowProjectsModal(true)}
-                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-[#e6f7f4] text-[#0D9488] flex items-center justify-center">
-                      <FolderOpen size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Projects</p>
-                      <p className="text-xs text-gray-500">Browse and open existing projects.</p>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSampleError(null);
-                    setShowSampleModal(true);
-                  }}
-                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-[#ecfdf5] text-[#0D9488] flex items-center justify-center">
-                      <FlaskConical size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">Try Sample</p>
-                      <p className="text-xs text-gray-500">Start with a ready-to-use sample workflow.</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              <div className="w-full max-w-md justify-self-center rounded-lg border border-gray-200 bg-white p-3">
-                <h2 className="text-sm font-semibold text-gray-900">Recent Projects</h2>
-                {recentProjects.length > 0 ? (
-                  <div className="mt-2 divide-y divide-gray-100">
-                    {recentProjects.map((project) => (
-                      <button
-                        key={project.id}
-                        type="button"
-                        onClick={() => navigate(`/dashboard/${project.id}`)}
-                        className="w-full text-left py-2 px-1 rounded-md hover:bg-gray-50 transition-colors"
-                      >
-                        <p className="text-sm font-medium text-[#0D9488] truncate">{project.name || 'Untitled project'}</p>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">
-                          {project.description || new Date(project.updatedAt || project.createdAt || Date.now()).toLocaleDateString()}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-gray-500">No recent projects yet.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <DashboardHome
+          recentProjects={recentProjects}
+          openCreate={openCreate}
+          openProjectsModal={() => setShowProjectsModal(true)}
+          openSampleModal={() => {
+            setSampleError(null);
+            setShowSampleModal(true);
+          }}
+        />
       ) : showBlankProjectPanel ? (
         <div className="h-full w-full bg-white" />
       ) : null}

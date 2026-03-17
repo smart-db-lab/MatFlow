@@ -32,6 +32,38 @@ const FEATURE_ENGINEERING_TYPES = [
   "Best Scaler"
 ];
 
+const displayNames = {
+  "Add/Modify": "Add/Modify Column",
+  "Change Dtype": "Change Data Type",
+  "Alter Field Name": "Rename Column",
+  "Imputation": "Fill Missing Values",
+  "Encoding": "Format Categories",
+  "Scaling": "Scale Features",
+  "Drop Column": "Remove Column",
+  "Drop Rows": "Remove Rows",
+  "Append Dataset": "Append Dataset",
+  "Merge Dataset": "Merge Datasets",
+  "Feature Selection": "Find Key Features",
+  "Cluster": "Group Data",
+  "Best Scaler": "Compare Scalers",
+};
+
+const FEATURE_DESCRIPTIONS = {
+  "Add/Modify": "Create new columns using mathematical formulas or modify existing ones.",
+  "Change Dtype": "Convert columns between numeric, text, or categorical data types.",
+  "Alter Field Name": "Rename columns in your dataset for better clarity.",
+  "Imputation": "Fill in missing values using statistical methods like mean, median, or KNN.",
+  "Encoding": "Convert categorical text data into numerical format for analysis.",
+  "Scaling": "Normalize or standardize numerical features to a common scale.",
+  "Drop Column": "Remove unwanted columns from your dataset.",
+  "Drop Rows": "Remove specific rows based on conditions or indices.",
+  "Append Dataset": "Add rows from another dataset to the bottom of your current data.",
+  "Merge Dataset": "Join another dataset horizontally using a common key column.",
+  "Feature Selection": "Identify and keep the most important predictive features.",
+  "Cluster": "Algorithmically group similar data points together.",
+  "Best Scaler": "Evaluate and compare different scaling methods on your data."
+};
+
 function UnifiedFeatureEngineering({ csvData }) {
   const activeFunction = useSelector((state) => state.sideBar.activeFunction);
   const dispatch = useDispatch();
@@ -94,6 +126,17 @@ function UnifiedFeatureEngineering({ csvData }) {
       />
       
       <div className="flex-1 overflow-y-auto">
+        <div className="px-4 py-3 bg-teal-50/50 border-b border-teal-100 mb-4 rounded-lg flex items-start gap-3">
+           <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center shrink-0 mt-0.5">
+             <svg className="w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+             </svg>
+           </div>
+           <div>
+             <h3 className="text-sm font-bold text-teal-800">{displayNames[selectedType] || selectedType}</h3>
+             <p className="text-[13px] text-teal-600/90 mt-0.5 leading-relaxed">{FEATURE_DESCRIPTIONS[selectedType]}</p>
+           </div>
+        </div>
         <div className="py-2">
           {renderComponent()}
         </div>

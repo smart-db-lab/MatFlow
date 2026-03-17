@@ -96,7 +96,7 @@ function ViolinPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLo
 
   // Extract string and number columns from CSV data
   useEffect(() => {
-    if (activeCsvFile && activeCsvFile.name && csvData.length > 0) {
+    if (csvData && csvData.length > 0) {
       const tempStringColumn = [];
       const tempNumberColumn = [];
 
@@ -117,7 +117,7 @@ function ViolinPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLo
       setStringColumn(uniqueStringColumns);
       setNumberColumn(uniqueNumberColumns);
     }
-  }, [activeCsvFile, csvData]);
+  }, [csvData]);
 
   const handleGenerate = async () => {
     if (!["Vertical", "Horizontal"].includes(orientation)) {

@@ -162,8 +162,8 @@ function FileTab({ projectId, projectName }) {
       const fileData = await apiService.matflow.dataset.readFile(projectId, folder, name);
 
       setFileActiveId(`${folder}/${name}`);
-      localStorage.setItem("activeFunction", "");
-      dispatch(setActiveFunction(""));
+      localStorage.setItem("activeFunction", "Data Table");
+      dispatch(setActiveFunction("Data Table"));
       localStorage.setItem("activeFile", JSON.stringify(`${folder}/${name}`));
       await storeDataInIndexedDB(fileData, `${folder}/${name}`);
     } catch (error) {

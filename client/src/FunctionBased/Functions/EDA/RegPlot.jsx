@@ -84,7 +84,7 @@ function RegPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLoadi
 
   // Extract numeric columns from CSV data
   useEffect(() => {
-    if (activeCsvFile && activeCsvFile.name && csvData.length > 0) {
+    if (csvData && csvData.length > 0) {
       const tempNumberColumn = [];
 
       csvData.forEach((row) => {
@@ -99,7 +99,7 @@ function RegPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLoadi
       const uniqueNumberColumns = [...new Set(tempNumberColumn)];
       setNumberColumn(uniqueNumberColumns);
     }
-  }, [activeCsvFile, csvData]);
+  }, [csvData]);
 
   const handleGenerate = async () => {
     try {

@@ -5,7 +5,6 @@ import { useParams } from "react-router-dom";
 import DashBoardLeft from "../FunctionBased/Components/DashBoardLeft/DashBoardLeft";
 import DashBoardRight from "../FunctionBased/Components/DashBoardRight/DashBoardRight";
 import DashBoardTop from "../FunctionBased/Components/DashBoardTop/DashBoardTop";
-import Chatbot from "../Components/Chatbot/Chatbot";
 import ProfileView from "./ProfileView";
 import { setActiveFunction } from "../Slices/SideBarSlice";
 import { setActiveFile, setActiveFolderAction } from "../Slices/UploadedFileSlice";
@@ -74,7 +73,6 @@ export default function Dashboard() {
           </>
         )}
       </div>
-      <Chatbot />
     </div>
   );
 }

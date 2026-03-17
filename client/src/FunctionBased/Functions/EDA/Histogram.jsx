@@ -144,7 +144,7 @@ function Histogram({csvData, splitMode = false, onPlotGenerated, onError, onLoad
     };
 
     useEffect(() => {
-        if (activeCsvFile && activeCsvFile.name && csvData.length > 0) {
+        if (csvData && csvData.length > 0) {
             const getData = () => {
                 const tempStringColumn = [];
                 const tempNumberColumn = [];
@@ -163,7 +163,7 @@ function Histogram({csvData, splitMode = false, onPlotGenerated, onError, onLoad
 
             getData();
         }
-    }, [activeCsvFile, csvData]);
+    }, [csvData]);
 
     const handleGenerate = async () => {
         try {

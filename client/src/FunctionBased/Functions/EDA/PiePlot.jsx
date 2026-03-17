@@ -91,7 +91,7 @@ function PiePlot({ csvData, splitMode = false, onPlotGenerated, onError, onLoadi
 
   // Extract string columns from CSV data
   useEffect(() => {
-    if (activeCsvFile && activeCsvFile.name && csvData.length > 0) {
+    if (csvData && csvData.length > 0) {
       const tempStringColumn = [];
 
       csvData.forEach((row) => {
@@ -104,7 +104,7 @@ function PiePlot({ csvData, splitMode = false, onPlotGenerated, onError, onLoadi
       const uniqueStringColumns = [...new Set(tempStringColumn)];
       setStringColumn(uniqueStringColumns);
     }
-  }, [activeCsvFile, csvData]);
+  }, [csvData]);
 
   const handleGenerate = async () => {
     if (gap < 0 || gap > 1) {

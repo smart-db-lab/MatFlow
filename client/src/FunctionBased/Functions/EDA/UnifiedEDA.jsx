@@ -138,8 +138,26 @@ function UnifiedEDA({ csvData }) {
             )}
 
             {!loading && !error && plotlyData.length === 0 && (
-              <div className="flex items-center justify-center min-h-[280px] w-full text-gray-500">
-                <p className="text-base text-center px-4">Configure your plot settings and generate to see the visualization</p>
+              <div className="flex flex-col items-center justify-center min-h-[400px] w-full max-w-lg text-slate-500 space-y-4">
+                <div className="w-16 h-16 rounded-full bg-teal-50 flex items-center justify-center mb-2">
+                  <svg className="w-8 h-8 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-slate-800">Create a {selectedPlotType === "Reg Plot" ? "Regression Plot" : selectedPlotType}</h3>
+                <div className="text-sm text-center px-4 space-y-3">
+                  {selectedPlotType === "Bar Plot" && <p>Compare quantities across different categories. Select one or more <b>categorical variables</b> and exactly one <b>numerical variable</b>.</p>}
+                  {selectedPlotType === "Pie Plot" && <p>Show proportions of a whole. Select exactly one <b>categorical variable</b> and one <b>numerical variable</b> to see the distribution.</p>}
+                  {selectedPlotType === "Histogram" && <p>Visualize the distribution of continuous data. Select one or more <b>numerical variables</b> to see where values cluster and their overall spread.</p>}
+                  {selectedPlotType === "Box Plot" && <p>Identify outliers and compare distributions. Select <b>numerical variables</b> to view their median, quartiles, and extremes.</p>}
+                  {selectedPlotType === "Violin Plot" && <p>Similar to a box plot, but adds a kernel density estimation to show the full distribution shape. Select <b>numerical variables</b>.</p>}
+                  {selectedPlotType === "Scatter Plot" && <p>Examine relationships between variables. Select horizontal and vertical <b>numerical axes</b> to spot correlations or clusters.</p>}
+                  {selectedPlotType === "Reg Plot" && <p>Plot data points with a fitted linear regression line. Select exactly two <b>numerical variables</b> (X and Y).</p>}
+                  {selectedPlotType === "Line Plot" && <p>Observe trends over time or continuous intervals. Select X and Y <b>numerical variables</b>.</p>}
+                  {selectedPlotType === "Custom Plot" && <p>Build any plot combination using the advanced custom builder options.</p>}
+                  {selectedPlotType === "Venn Diagram" && <p>Show logical relationships and overlaps between different structural sets or chemical groups.</p>}
+                  <p className="mt-4 pt-4 border-t border-slate-100 text-slate-400">Configure your settings in the left panel and click <b>Generate</b> to visualize your data.</p>
+                </div>
               </div>
             )}
           </div>

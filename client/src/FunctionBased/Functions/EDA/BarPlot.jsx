@@ -27,7 +27,7 @@ function BarPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLoadi
 
   // Populate column names based on CSV data
   useEffect(() => {
-    if (activeCsvFile && activeCsvFile.name && csvData.length > 0) {
+    if (csvData && csvData.length > 0) {
       const getData = () => {
         const tempStringColumn = [];
         const tempNumberColumn = [];
@@ -47,7 +47,7 @@ function BarPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLoadi
 
       getData();
     }
-  }, [activeCsvFile, csvData]);
+  }, [csvData]);
 
   // Listen for chatbot-generated bar plot requests
   useEffect(() => {

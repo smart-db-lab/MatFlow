@@ -47,6 +47,22 @@ const featureIcons = {
   "Best Scaler": SlidersHorizontal,
 };
 
+const displayNames = {
+  "Add/Modify": "Add/Modify Column",
+  "Change Dtype": "Change Data Type",
+  "Alter Field Name": "Rename Column",
+  "Imputation": "Fill Missing Values",
+  "Encoding": "Format Categories",
+  "Scaling": "Scale Features",
+  "Drop Column": "Remove Column",
+  "Drop Rows": "Remove Rows",
+  "Append Dataset": "Append Dataset",
+  "Merge Dataset": "Merge Datasets",
+  "Feature Selection": "Find Key Features",
+  "Cluster": "Group Data",
+  "Best Scaler": "Compare Scalers",
+};
+
 function FeatureEngineeringSelector({ selectedType, onTypeChange }) {
   return (
     <div className="w-full pt-4 mb-4 pb-3 border-b border-gray-300">
@@ -75,7 +91,7 @@ function FeatureEngineeringSelector({ selectedType, onTypeChange }) {
                 <Icon size={13} strokeWidth={2} />
               </span>
             ) : null}
-            {type}
+            {displayNames[type] || type}
           </button>
           );
         })}

@@ -22,7 +22,7 @@ function CustomPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLo
   const [error, setError] = useState(null); // State for error handling
 
   useEffect(() => {
-    if (activeCsvFile && activeCsvFile.name) {
+    if (csvData && csvData.length > 0) {
       const getData = async () => {
         const tempStringColumn = [];
         const tempNumberColumn = [];
@@ -38,7 +38,7 @@ function CustomPlot({ csvData, splitMode = false, onPlotGenerated, onError, onLo
 
       getData();
     }
-  }, [activeCsvFile, csvData]);
+  }, [csvData]);
 
   const handleGenerate = async () => {
     try {

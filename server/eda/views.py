@@ -36,6 +36,8 @@ class EDA(APIView):
             return boxplot(df, data)
         elif plot_type == 'countplot':
             return countplot(df, data)
+        elif plot_type == 'customplot':
+            return customplot(df, data)
         elif plot_type == 'histogram':
             return histogram(df, data)
         elif plot_type == 'lineplot':
