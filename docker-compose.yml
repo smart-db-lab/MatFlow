@@ -1,14 +1,17 @@
-version: "3.9"
-
 x-server-defaults: &server-defaults
+    platform: linux/amd64
     build:
         context: ./server
         dockerfile: Dockerfile
     restart: unless-stopped
+    env_file:
+        - ./server/.env
     environment:
         DJANGO_SETTINGS_MODULE: Matflow.settings
         CELERY_BROKER_URL: redis://redis:6379/0
         CELERY_RESULT_BACKEND: redis://redis:6379/0
+
+
     volumes:
         - ./server:/app
     depends_on:
