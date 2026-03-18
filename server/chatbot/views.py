@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from .ollama_client import ollama_chat
 from .gemini_client import gemini_chat
 from .llm_tools import TOOLS
+from .assistant_agent import LabAssistantAgent
 
 SYSTEM_PROMPT = """
 You are a data science assistant.
@@ -123,3 +124,26 @@ class ChatbotView(APIView):
         except Exception as e:
             print("Error invoking tool:", e)
             return Response({"error": "Invalid JSON response from LLM", "detail": str(e)}, status=500)
+
+class LabAssistantChatView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        query = request.data.get("query", "")
+        conversation_history = request.data.get("conversation_history", [])
+        dataset_context = request.data.get("dataset_context", {})
+        
+        if not query:
+            return Response({"error": "Query goes here!"}, status=400)
+            
+        agent = LabAssistantAgent()
+        json_resp, err = agent.process_chat(
+            conversation_history=conversation_history,
+            dataset_context=json.dumps(dataset_context, indent=2),
+            query=query
+        )
+        
+        if err:
+            return Response({"error": err}, status=500)
+            
+        return Response(json_resp)

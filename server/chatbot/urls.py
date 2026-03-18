@@ -18,8 +18,9 @@
 
 
 from django.urls import path
-from .views import ChatbotView
+from .views import ChatbotView, LabAssistantChatView
 
 urlpatterns = [
     path("chat/", ChatbotView.as_view()),
+    path("lab_assistant/", LabAssistantChatView.as_view()),
 ]
