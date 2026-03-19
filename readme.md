@@ -16,8 +16,8 @@ A full-stack ML workflow platform — React frontend + Django REST backend.
 
 ## Setup
 #### Using Docker : 
-Open terminal & change directory to MatFlow 
-        ```  cd MatFlow ```
+Open terminal & change directory to MLFlow 
+        ```  cd MLFlow ```
        
  Run this command 
         ``` docker compose up  --build  ``` 
@@ -135,8 +135,9 @@ Open **4 terminals** and run one command in each:
 ```bash
 cd server
 conda activate venv
-celery -A Matflow worker -l info --pool=solo
-python -m celery -A Matflow worker -l info --pool=solo
+celery -A Matflow worker -l info --pool=solo   
+# or 
+python -m celery -A Matflow worker -l info -P solo
 ```
 
 **Stop Celery worker:**
@@ -154,8 +155,8 @@ Get-Process -Name celery | Stop-Process -Force
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:8000 |
+| Frontend | http://localhost:6060 |
+| Backend API | http://localhost:9000 |
 ---
 
 ## Troubleshooting

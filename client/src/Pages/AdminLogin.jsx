@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { login, isLoggedIn, checkAdminStatus, isAdminLoggedIn } from "../util/adminAuth";
+import { adminLogin, isLoggedIn, checkAdminStatus } from "../util/adminAuth";
 import { loginSchema } from "../schemas/authSchemas";
 
 function AdminLogin() {
@@ -70,7 +70,7 @@ function AdminLogin() {
         return;
       }
 
-      const result = await login(user.email, user.password);
+      const result = await adminLogin(user.email, user.password);
 
       if (result.success) {
         if (result.isAdmin) {

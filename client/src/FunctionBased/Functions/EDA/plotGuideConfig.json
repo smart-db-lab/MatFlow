@@ -1,0 +1,197 @@
+{
+  "Bar Plot": {
+    "summary": "Compare values across categories using bars.",
+    "fields": [
+      {
+        "name": "Categorical Variable(s)",
+        "detail": "Select one or more label/group columns (for example: Species, Region)."
+      },
+      {
+        "name": "Numerical Variable",
+        "detail": "Select the numeric metric to aggregate or compare."
+      },
+      {
+        "name": "Orientation",
+        "detail": "Vertical for standard bars, Horizontal for long labels."
+      }
+    ],
+    "steps": [
+      "Choose category column(s) first.",
+      "Select the numeric column for bar height/length.",
+      "Set orientation and click Generate."
+    ]
+  },
+  "Pie Plot": {
+    "summary": "Show category distribution as proportional slices.",
+    "fields": [
+      {
+        "name": "Categorical Variable",
+        "detail": "Select one or more category columns only. Numerical input is not required for this plot."
+      }
+    ],
+    "steps": [
+      "Select the category column to segment the pie.",
+      "Use Generate to render category proportions."
+    ]
+  },
+  "Histogram": {
+    "summary": "Visualize frequency distribution of numeric values.",
+    "fields": [
+      {
+        "name": "Numerical Variable(s)",
+        "detail": "Select one or more numeric columns to inspect distribution."
+      },
+      {
+        "name": "Orientation",
+        "detail": "Switch axis direction when needed."
+      },
+      {
+        "name": "Auto Bin / Bins",
+        "detail": "Use Auto Bin for automatic buckets, or manually tune bin count."
+      },
+      {
+        "name": "KDE",
+        "detail": "Enable KDE to overlay a smooth density trend."
+      }
+    ],
+    "steps": [
+      "Pick numeric variable(s).",
+      "Adjust bins/KDE if needed.",
+      "Click Generate to view distribution."
+    ]
+  },
+  "Box Plot": {
+    "summary": "Compare spread, quartiles, and outliers across groups.",
+    "fields": [
+      {
+        "name": "Categorical Variable(s)",
+        "detail": "Group data by category."
+      },
+      {
+        "name": "Numerical Variable",
+        "detail": "Choose the numeric measure to analyze."
+      },
+      {
+        "name": "Hue (optional)",
+        "detail": "Add a second category split inside each group."
+      },
+      {
+        "name": "Orientation",
+        "detail": "Choose vertical or horizontal layout."
+      }
+    ],
+    "steps": [
+      "Select category and numeric columns.",
+      "Optionally add hue for deeper comparison.",
+      "Set orientation and Generate."
+    ]
+  },
+  "Violin Plot": {
+    "summary": "Show distribution shape and spread by category.",
+    "fields": [
+      {
+        "name": "Numerical Variable",
+        "detail": "Select the numeric column to model distribution."
+      },
+      {
+        "name": "Categorical Variable",
+        "detail": "Group distributions by category."
+      },
+      {
+        "name": "Hue (optional)",
+        "detail": "Split each category by an additional class."
+      },
+      {
+        "name": "Orientation",
+        "detail": "Switch vertical/horizontal rendering."
+      }
+    ],
+    "steps": [
+      "Choose numeric and categorical columns.",
+      "Optionally add hue and orientation.",
+      "Generate the violin chart."
+    ]
+  },
+  "Scatter Plot": {
+    "summary": "Explore relationship between two numeric variables.",
+    "fields": [
+      {
+        "name": "X Variable",
+        "detail": "Select numeric column(s) for horizontal axis."
+      },
+      {
+        "name": "Y Variable",
+        "detail": "Select numeric column for vertical axis."
+      },
+      {
+        "name": "Hue (optional)",
+        "detail": "Color points by category for segment insights."
+      }
+    ],
+    "steps": [
+      "Choose X and Y numeric columns.",
+      "Optionally add hue for category-wise patterns.",
+      "Click Generate."
+    ]
+  },
+  "Reg Plot": {
+    "summary": "Analyze trend and fit line between two numeric variables.",
+    "fields": [
+      {
+        "name": "X Variable",
+        "detail": "Select numeric column(s) for predictor axis."
+      },
+      {
+        "name": "Y Variable",
+        "detail": "Select numeric response column."
+      }
+    ],
+    "steps": [
+      "Choose X and Y numerical columns.",
+      "Click Generate to inspect trend and fit."
+    ]
+  },
+  "Line Plot": {
+    "summary": "Track numeric changes across an ordered numeric axis.",
+    "fields": [
+      {
+        "name": "X Variable",
+        "detail": "Select numeric column(s) for horizontal progression."
+      },
+      {
+        "name": "Y Variable",
+        "detail": "Select numeric metric to plot."
+      },
+      {
+        "name": "Hue (optional)",
+        "detail": "Split lines by category."
+      }
+    ],
+    "steps": [
+      "Select X and Y numeric columns.",
+      "Optionally set hue for multiple line groups.",
+      "Generate the chart."
+    ]
+  },
+  "Custom Plot": {
+    "summary": "Create a flexible numeric comparison chart.",
+    "fields": [
+      {
+        "name": "X Variable",
+        "detail": "Select numeric column(s) for the X axis."
+      },
+      {
+        "name": "Y Variable",
+        "detail": "Select numeric metric for Y axis."
+      },
+      {
+        "name": "Hue (optional)",
+        "detail": "Color/group data by category if needed."
+      }
+    ],
+    "steps": [
+      "Configure X, Y, and optional hue.",
+      "Click Generate to preview the custom visualization."
+    ]
+  }
+}

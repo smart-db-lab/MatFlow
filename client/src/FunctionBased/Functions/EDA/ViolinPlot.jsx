@@ -152,9 +152,6 @@ function ViolinPlot({
             setError(null);
 
             const safeHue = getSafeHueForViolin(categorical, hue, csvData);
-            if (safeHue.warning) {
-                toast.info(safeHue.warning);
-            }
 
             const data = await apiService.matflow.eda.violinPlot(
                 withWorkspaceContext(
@@ -171,23 +168,19 @@ function ViolinPlot({
             );
             console.log("Received data from backend:", data);
 
-            if (Array.isArray(data.plotly)) {
-                setPlotlyData(data.plotly);
-            } else if (
-                typeof data.plotly === "object" &&
-                data.plotly !== null
-            ) {
-                setPlotlyData([data.plotly]);
-            } else if (Array.isArray(data.echarts)) {
-                setEchartsData(data.echarts);
-            } else if (
-                typeof data.echarts === "object" &&
-                data.echarts !== null
-            ) {
-                setEchartsData([data.echarts]);
-            } else {
-                setEchartsData([]);
-            }
+            const nextEchartsData = Array.isArray(data.echarts)
+                ? data.echarts
+                : typeof data.echarts === "object" && data.echarts !== null
+                  ? [data.echarts]
+                  : [];
+            const nextPlotlyData = Array.isArray(data.plotly)
+                ? data.plotly
+                : typeof data.plotly === "object" && data.plotly !== null
+                  ? [data.plotly]
+                  : [];
+            setEchartsData(nextEchartsData);
+            setPlotlyData(nextEchartsData.length > 0 ? [] : nextPlotlyData);
+            toast.success("Violin plot created successfully.");
         } catch (error) {
             console.error("Error fetching Plotly data:", error);
             setError(error.message || "An unexpected error occurred.");
@@ -245,9 +238,6 @@ function ViolinPlot({
                 activeHueColumn,
                 csvData,
             );
-            if (safeHue.warning) {
-                toast.info(safeHue.warning);
-            }
 
             const data = await apiService.matflow.eda.violinPlot(
                 withWorkspaceContext(
@@ -267,32 +257,28 @@ function ViolinPlot({
             );
             console.log("Received data from backend:", data);
 
-            if (
-                Array.isArray(data.plotly) ||
-                (typeof data.plotly === "object" && data.plotly !== null)
-            ) {
-                const nextPlotlyData = Array.isArray(data.plotly)
-                    ? data.plotly
-                    : [data.plotly];
-                setPlotlyData(nextPlotlyData);
-                if (onPlotGenerated && splitMode) {
+            const nextEchartsData = Array.isArray(data.echarts)
+                ? data.echarts
+                : typeof data.echarts === "object" && data.echarts !== null
+                  ? [data.echarts]
+                  : [];
+            const nextPlotlyData = Array.isArray(data.plotly)
+                ? data.plotly
+                : typeof data.plotly === "object" && data.plotly !== null
+                  ? [data.plotly]
+                  : [];
+
+            setEchartsData(nextEchartsData);
+            setPlotlyData(nextEchartsData.length > 0 ? [] : nextPlotlyData);
+
+            if (onPlotGenerated && splitMode) {
+                if (nextEchartsData.length > 0) {
+                    onPlotGenerated(nextEchartsData);
+                } else {
                     onPlotGenerated({ engine: "plotly", data: nextPlotlyData });
                 }
-            } else {
-                let plotData = [];
-                if (Array.isArray(data.echarts)) {
-                    plotData = data.echarts;
-                } else if (
-                    typeof data.echarts === "object" &&
-                    data.echarts !== null
-                ) {
-                    plotData = [data.echarts]; // Wrap single plot in an array
-                }
-                setEchartsData(plotData);
-                if (onPlotGenerated && splitMode) {
-                    onPlotGenerated(plotData);
-                }
             }
+            toast.success("Violin plot created successfully.");
         } catch (error) {
             console.error("Error fetching Plotly data:", error);
             const errorMsg = error.message || "An unexpected error occurred.";
@@ -437,71 +423,67 @@ function ViolinPlot({
                 <div className="mt-4 text-red-500 text-center">{error}</div>
             )}
 
-            {plotlyData.length > 0 && (
-                <div className="mt-6 grid grid-cols-1 gap-6">
-                    {plotlyData.map((figure, index) =>
-                        (() => {
-                            const traces = Array.isArray(figure?.data)
-                                ? figure.data
-                                : [];
-                            const hideLegend =
-                                traces.length > MAX_VIOLIN_HUE_LEVELS;
-                            return (
-                                <Plot
-                                    key={`violin-plotly-${index}`}
-                                    data={traces}
-                                    layout={{
-                                        ...(figure?.layout || {}),
-                                        autosize: true,
-                                        showlegend: hideLegend
-                                            ? false
-                                            : figure?.layout?.showlegend,
-                                        margin: {
-                                            l:
-                                                orientation === "Horizontal"
-                                                    ? 140
-                                                    : 70,
-                                            r: 30,
-                                            t: 70,
-                                            b:
-                                                orientation === "Vertical"
-                                                    ? 140
-                                                    : 70,
-                                        },
-                                        xaxis: {
-                                            ...(figure?.layout?.xaxis || {}),
-                                            automargin: true,
-                                            tickangle:
-                                                orientation === "Vertical"
-                                                    ? 35
-                                                    : 0,
-                                            tickfont: { size: 10 },
-                                        },
-                                        yaxis: {
-                                            ...(figure?.layout?.yaxis || {}),
-                                            automargin: true,
-                                            tickfont: { size: 10 },
-                                        },
-                                    }}
-                                    config={{
-                                        responsive: true,
-                                        displaylogo: false,
-                                        displayModeBar: "hover",
-                                    }}
-                                    useResizeHandler
-                                    style={{
-                                        width: "100%",
-                                        minHeight: "420px",
-                                    }}
-                                />
-                            );
-                        })(),
-                    )}
-                </div>
-            )}
-
-            {plotlyData.length === 0 && echartsData.length > 0 && (
+            {echartsData.length > 0 && (
                 <LayoutSelector echartsData={echartsData} />
+            )}
+            {echartsData.length === 0 && plotlyData.length > 0 && (
+                <div className="mt-6 grid grid-cols-1 gap-6">
+                    {plotlyData.map((figure, index) => {
+                        const traces = Array.isArray(figure?.data)
+                            ? figure.data
+                            : [];
+                        const hideLegend = traces.length > MAX_VIOLIN_HUE_LEVELS;
+                        return (
+                            <Plot
+                                key={`violin-plotly-fallback-${index}`}
+                                data={traces}
+                                layout={{
+                                    ...(figure?.layout || {}),
+                                    autosize: true,
+                                    showlegend: hideLegend
+                                        ? false
+                                        : figure?.layout?.showlegend,
+                                    margin: {
+                                        l:
+                                            orientation === "Horizontal"
+                                                ? 140
+                                                : 70,
+                                        r: 30,
+                                        t: 70,
+                                        b:
+                                            orientation === "Vertical"
+                                                ? 140
+                                                : 70,
+                                    },
+                                    xaxis: {
+                                        ...(figure?.layout?.xaxis || {}),
+                                        automargin: true,
+                                        tickangle:
+                                            orientation === "Vertical"
+                                                ? 35
+                                                : 0,
+                                        tickfont: { size: 10 },
+                                    },
+                                    yaxis: {
+                                        ...(figure?.layout?.yaxis || {}),
+                                        automargin: true,
+                                        tickfont: { size: 10 },
+                                    },
+                                }}
+                                config={{
+                                    responsive: true,
+                                    displaylogo: false,
+                                    displayModeBar: "hover",
+                                }}
+                                useResizeHandler
+                                style={{
+                                    width: "100%",
+                                    minHeight: "420px",
+                                }}
+                            />
+                        );
+                    })}
+                </div>
             )}
         </div>
     );

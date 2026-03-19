@@ -3,15 +3,17 @@ import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { ChevronDown, Columns3, Download, Maximize2, Table2 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useSelector } from "react-redux";
+import { toast } from "react-toastify";
 import { matflowApi } from "../../../services/api/matflowApi";
 import { getWorkspaceRootFromPath } from "../../../util/utils";
+import GridPaginationControls from "./GridPaginationControls";
 
 function AgGridAutoDataComponent({
   rowData,
   rowHeight = 34,
-  paginationPageSize = 10,
+  paginationPageSize: _paginationPageSize = 10,
   enablePagination = true,
-  paginationThreshold = 20,
+  paginationThreshold = 0,
   autoPageSize = true,
   headerHeight = 36,
   download = false,
@@ -21,16 +23,52 @@ function AgGridAutoDataComponent({
   themeVariant = "default",
   flatContainer = false,
   projectId: projectIdProp = null,
+  adaptiveHeight = false,
+  minHeight = 220,
+  capAdaptiveHeight = true,
 }) {
   const { projectId: routeProjectId } = useParams();
   const activeProjectId = projectIdProp || routeProjectId;
   const activeFolder = useSelector((state) => state.uploadedFile.activeFolder);
   const activeFile = useSelector((state) => state.uploadedFile.activeFile);
   const gridRef = useRef();
+  const DEFAULT_PAGE_SIZE = 10;
   const safeRowData = Array.isArray(rowData) ? rowData : [];
   const isDatasetTheme = themeVariant === "dataset";
   const totalRows = safeRowData.length;
   const shouldPaginate = enablePagination && totalRows > paginationThreshold;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPageSize, setCurrentPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const totalPages = useMemo(
+    () => (shouldPaginate ? Math.max(1, Math.ceil(totalRows / currentPageSize)) : 1),
+    [shouldPaginate, totalRows, currentPageSize],
+  );
+  const resolvedHeight = useMemo(() => {
+    const parsedHeight =
+      typeof height === "number"
+        ? height
+        : Number.parseInt(String(height).replace("px", ""), 10) || 600;
+    if (!adaptiveHeight) return parsedHeight;
+
+    const visibleRows = shouldPaginate
+      ? Math.max(Math.min(currentPageSize, totalRows || currentPageSize), 1)
+      : Math.max(totalRows, 1);
+    const paginationPanelHeight = shouldPaginate ? 36 : 0;
+    const contentHeight = headerHeight + visibleRows * rowHeight + paginationPanelHeight + 24;
+    const desiredHeight = Math.max(minHeight, contentHeight);
+    if (!capAdaptiveHeight) return desiredHeight;
+    return Math.min(parsedHeight, desiredHeight);
+  }, [
+    adaptiveHeight,
+    height,
+    shouldPaginate,
+    currentPageSize,
+    totalRows,
+    headerHeight,
+    rowHeight,
+    minHeight,
+    capAdaptiveHeight,
+  ]);
 
   const columnDefs = useMemo(() => {
     if (safeRowData.length === 0 || !safeRowData[0]) return [];
@@ -135,6 +173,10 @@ function AgGridAutoDataComponent({
     }
   }, [customColumnOrder, reorderColumns]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [totalRows]);
+
   const buildCsvContent = useCallback((rows, columns) => {
     const header = columns.join(",");
     const lines = rows.map((row) =>
@@ -210,9 +252,13 @@ function AgGridAutoDataComponent({
           filename,
           `${workspaceRoot}/output/generated_datasets`,
         );
+        toast.success("Dataset saved successfully.");
       } catch (error) {
         console.warn("Failed to persist CSV in workspace output folder:", error);
+        toast.warning("Failed to save dataset in project.");
       }
+    } else {
+      toast.success("Download started.");
     }
 
     setShowDownloadDropdown(false);
@@ -230,34 +276,12 @@ function AgGridAutoDataComponent({
   return (
     <>
       <div
-        className={
+        className={`mb-2 flex w-full flex-wrap items-center justify-end gap-2 pb-2 ${
           isDatasetTheme
-            ? flatContainer
-              ? "ag-theme-alpine matflow-grid w-full bg-white"
-              : "ag-theme-alpine matflow-grid w-full rounded-xl border border-gray-200 bg-white p-2"
-            : "ag-theme-alpine mb-12"
-        }
-        style={{ height, width: "100%" }}
+            ? "rounded-lg border border-gray-200 bg-white px-2.5 py-2"
+            : ""
+        }`}
       >
-        <AgGridReact
-          ref={gridRef}
-          rowData={safeRowData}
-          columnDefs={columnDefs}
-          rowHeight={rowHeight}
-          pagination={shouldPaginate}
-          paginationPageSize={paginationPageSize}
-          paginationAutoPageSize={shouldPaginate && autoPageSize}
-          rowModelType="clientSide"
-          suppressRowVirtualisation={false}
-          rowBuffer={20}
-          domLayout="normal"
-          alwaysShowVerticalScroll={false}
-          defaultColDef={defaultColDef}
-          headerHeight={headerHeight}
-          onGridReady={onGridReady}
-        ></AgGridReact>
-      </div>
-      <div className={`flex flex-wrap items-center gap-2 mt-3 pb-2 ${isDatasetTheme ? "" : ""}`}>
         <button
           className={
             isDatasetTheme
@@ -342,6 +366,66 @@ function AgGridAutoDataComponent({
           </div>
         )}
       </div>
+      <div
+        className={
+          isDatasetTheme
+            ? flatContainer
+              ? "ag-theme-alpine matflow-grid w-full bg-white"
+              : "ag-theme-alpine matflow-grid w-full rounded-xl border border-gray-200 bg-white p-2"
+            : "ag-theme-alpine mb-12"
+        }
+        style={{ height: `${resolvedHeight}px`, width: "100%" }}
+      >
+        <AgGridReact
+          ref={gridRef}
+          rowData={safeRowData}
+          columnDefs={columnDefs}
+          rowHeight={rowHeight}
+          pagination={shouldPaginate}
+          paginationPageSize={currentPageSize}
+          paginationPageSizeSelector={[10, 25, 50, 100]}
+          paginationAutoPageSize={false}
+          suppressPaginationPanel={shouldPaginate}
+          rowModelType="clientSide"
+          suppressRowVirtualisation={false}
+          rowBuffer={20}
+          domLayout="normal"
+          alwaysShowVerticalScroll={false}
+          defaultColDef={defaultColDef}
+          headerHeight={headerHeight}
+          onGridReady={onGridReady}
+          onPaginationChanged={() => {
+            if (!gridRef.current?.api) return;
+            setCurrentPage(gridRef.current.api.paginationGetCurrentPage() + 1);
+          }}
+        ></AgGridReact>
+      </div>
+      {shouldPaginate && (
+        <GridPaginationControls
+          page={currentPage}
+          totalPages={totalPages}
+          pageSize={currentPageSize}
+          totalRecords={totalRows}
+          onPageChange={(nextPage) => {
+            const clamped = Math.max(1, Math.min(nextPage, totalPages));
+            setCurrentPage(clamped);
+            gridRef.current?.api?.paginationGoToPage(clamped - 1);
+          }}
+          onPageSizeChange={(nextSize) => {
+            setCurrentPageSize(nextSize);
+            setCurrentPage(1);
+            if (gridRef.current?.api) {
+              if (typeof gridRef.current.api.paginationSetPageSize === "function") {
+                gridRef.current.api.paginationSetPageSize(nextSize);
+              } else if (typeof gridRef.current.api.setGridOption === "function") {
+                gridRef.current.api.setGridOption("paginationPageSize", nextSize);
+              }
+              gridRef.current.api.paginationGoToFirstPage();
+            }
+          }}
+          loading={false}
+        />
+      )}
     </>
   );
 }

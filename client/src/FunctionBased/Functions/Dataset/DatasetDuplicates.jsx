@@ -12,6 +12,10 @@ function DatasetDuplicates({ csvData }) {
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [columnNames, setColumnNames] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const datasetName = useMemo(() => {
+    const rawName = String(activeCsvFile?.name || "").split("/").pop();
+    return rawName || "Selected Dataset";
+  }, [activeCsvFile]);
 
   useEffect(() => {
     if (activeCsvFile) {
@@ -127,13 +131,12 @@ function DatasetDuplicates({ csvData }) {
 
   return (
     <div className="mt-4">
-      <div className="mb-3">
+      <div className="mb-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-gray-900">Duplicate Materials Detection</h2>
+          <h2 className="text-base font-semibold text-gray-900">
+            Duplicate Materials Detection - {datasetName}
+          </h2>
           <div className="flex items-center gap-2">
-            <p className="rounded-md border border-[#D9ECE9] bg-[#F0FDFA] px-3 py-1.5 text-base font-semibold text-[#0F766E]">
-              {duplicateRows.length} duplicate rows
-            </p>
             <button
               type="button"
               onClick={() => setShowFilters((prev) => !prev)}

@@ -174,6 +174,25 @@ def display_heatmap(correlation_data):
                 "color": ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
             }
         },
+        "dataZoom": [
+            {
+                "type": "slider",
+                "show": True,
+                "xAxisIndex": [0],
+                "start": 0,
+                "end": 100,
+                "textStyle": {"color": "#1f2937"}
+            },
+            {
+                "type": "slider",
+                "show": True,
+                "yAxisIndex": [0],
+                "start": 0,
+                "end": 100,
+                "orient": "vertical",
+                "textStyle": {"color": "#1f2937"}
+            }
+        ],
         "series": [{
             "name": "Correlation",
             "type": "heatmap",

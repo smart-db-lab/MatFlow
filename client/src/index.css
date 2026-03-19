@@ -173,24 +173,25 @@ html {
 .matflow-grid {
   --ag-font-family: "Inter", system-ui, -apple-system, sans-serif;
   --ag-font-size: 13px;
-  --ag-row-height: 34px;
-  --ag-header-height: 40px;
-  --ag-border-color: #cbd5e1;
-  --ag-secondary-border-color: #dbe2ea;
-  --ag-header-background-color: #f0fdfa;
+  --ag-row-height: 36px;
+  --ag-header-height: 42px;
+  --ag-border-color: #d5dde8;
+  --ag-secondary-border-color: #e2e8f0;
+  --ag-header-background-color: #f8fafc;
   --ag-odd-row-background-color: #ffffff;
-  --ag-row-hover-color: #ecfeff;
-  --ag-selected-row-background-color: #e6fffb;
-  --ag-foreground-color: #1f2937;
-  --ag-header-foreground-color: #111827;
-  --ag-range-selection-border-color: #0d9488;
-  --ag-input-focus-border-color: #0d9488;
+  --ag-row-hover-color: #f0fdfa;
+  --ag-selected-row-background-color: #ecfeff;
+  --ag-foreground-color: #0f172a;
+  --ag-header-foreground-color: #0f172a;
+  --ag-range-selection-border-color: #0f766e;
+  --ag-input-focus-border-color: #0f766e;
 }
 
 .matflow-grid .ag-root-wrapper {
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
 }
 
 .matflow-grid .ag-header-cell-label {
@@ -208,7 +209,7 @@ html {
 .matflow-grid .ag-header-cell {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
-  border-right: 1px solid #bfe8e2 !important;
+  border-right: 1px solid #e2e8f0 !important;
 }
 
 .matflow-grid .ag-header-cell:last-child {
@@ -227,10 +228,59 @@ html {
 }
 
 .matflow-grid .ag-header {
-  border-bottom: 2px solid #a7ddd4 !important;
-  box-shadow: inset 0 -1px 0 #c7ece7;
+  border-bottom: 1px solid #d5dde8 !important;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
 }
 
 .matflow-grid .ag-row {
-  border-color: #dbe2ea !important;
+  border-color: #e2e8f0 !important;
+}
+
+.matflow-grid .ag-paging-panel {
+  border-top: 1px solid #dbe3ee !important;
+  background: #f8fafc !important;
+  padding: 6px 10px !important;
+}
+
+.matflow-grid .ag-paging-row-summary-panel,
+.matflow-grid .ag-paging-page-summary-panel {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.matflow-grid .ag-paging-button {
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.matflow-grid .ag-paging-button:hover {
+  background: #f0fdfa !important;
+}
+
+/* Keep small MUI inputs consistent in VDA + material properties workflows */
+.matflow-unified-input-height .MuiInputBase-root.MuiOutlinedInput-root.MuiInputBase-sizeSmall {
+  min-height: 35px !important;
+}
+
+.matflow-unified-input-height .MuiOutlinedInput-root {
+  border-radius: 12px !important;
+}
+
+.matflow-unified-input-height .MuiInputBase-root.MuiOutlinedInput-root.MuiInputBase-sizeSmall .MuiInputBase-input {
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
+}
+
+.matflow-unified-input-height .MuiAutocomplete-inputRoot.MuiOutlinedInput-root {
+  min-height: 35px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.matflow-unified-input-height .MuiAutocomplete-inputRoot .MuiAutocomplete-input {
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
 }

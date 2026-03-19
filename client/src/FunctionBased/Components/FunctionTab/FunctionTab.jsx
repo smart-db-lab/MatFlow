@@ -20,6 +20,7 @@ import { styled } from '@mui/material';
 import { PiGraph } from 'react-icons/pi';
 import { useParams } from 'react-router-dom';
 import { getProjectSessionKey, sessionGetJson, sessionGetString, sessionSetJson, sessionSetString } from '../../../util/sessionProjectStorage';
+import { toast } from 'react-toastify';
 
 const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
   color: '#374151',
@@ -199,7 +200,7 @@ const functionTreeData = [
   },
   {
     id: '2',
-    label: 'Materials Descriptor Generation',
+    label: 'Manage Material Properties',
     icon: <RxGear size={17} />,
     children: [], // No dropdown: access via tag buttons in the right panel
   },
@@ -211,48 +212,47 @@ const functionTreeData = [
   },
   {
     id: '5',
-    label: 'Computational ML Model',
+    label: 'Generate Predictive Model',
+    displayLabel: 'Generate Predictive Model',
     icon: <TbBrain size={18} />,
     children: [
       {
         id: '5-0',
-        label: 'Generate Predictive Model',
-        children: [
-          {
-            id: '5-0-0',
-            label: 'Split Dataset',
-          },
-          {
-            id: '5-0-1',
-            label: 'Build Model',
-          },
-          {
-            id: '5-0-2',
-            label: 'Model Evaluation',
-          },
-          {
-            id: '5-0-3',
-            label: 'Model Prediction',
-          },
-          {
-            id: '5-0-4',
-            label: 'Models',
-          },
-        ],
+        label: 'Split Dataset',
+        displayLabel: 'Split Dataset Test-Train',
       },
       {
         id: '5-1',
-        label: 'Materials Property Prediction',
+        label: 'Build Model',
       },
-      // {
-      //   id: '5-2',
-      //   label: 'Time Series Analysis',
-      // },
+      {
+        id: '5-2',
+        label: 'Model Prediction',
+        displayLabel: 'Evaluate Model Performance',
+      },
+      {
+        id: '5-3',
+        label: 'Models',
+        displayLabel: 'Saved Models',
+      },
+      {
+        id: '5-4',
+        label: 'Model Evaluation',
+        displayLabel: 'Compare Models',
+      },
+    ],
+  },
+  {
+    id: '6',
+    label: 'Materials Property Prediction',
+    icon: <RxRocket size={16} />,
+    children: [
     ],
   },
   {
     id: '8',
     label: 'ReverseML',
+    displayLabel: 'Generate New Materials',
     icon: <HiOutlinePuzzle size={18} />,
     children: [
       {
@@ -302,6 +302,23 @@ function FunctionTab() {
     const segments = rawName.split(/[\\/]/);
     return segments[segments.length - 1] || rawName;
   })();
+  const activeFilePath = String(activeCsvFile?.name || '')
+    .replace(/\\/g, '/')
+    .toLowerCase();
+  const chartExtensions = ['.png', '.jpg', '.jpeg', '.svg', '.webp', '.json'];
+  const isChartSelected =
+    activeFilePath.includes('/output/charts/') &&
+    chartExtensions.some((ext) => activeFilePath.endsWith(ext));
+  const isChartPreviewActive =
+    String(activeFunctionFromRedux || '').trim().toLowerCase() === 'chart preview';
+  const isFunctionTabBlocked = isChartSelected || isChartPreviewActive;
+  const functionTabToastId = 'function-tab-select-dataset';
+
+  const showSelectDatasetToast = () => {
+    toast.info('To use functions, select a dataset first.', {
+      toastId: functionTabToastId,
+    });
+  };
 
   const getAncestorPath = (nodeId) =>
     nodeId
@@ -436,6 +453,13 @@ function FunctionTab() {
   };
 
   const handleItemClick = (event, nodeId) => {
+    if (isFunctionTabBlocked) {
+      event.preventDefault();
+      event.stopPropagation();
+      showSelectDatasetToast();
+      return;
+    }
+
     const label = getLabelFromNodeId(nodeId);
     
     if (!label) return;
@@ -482,7 +506,7 @@ function FunctionTab() {
                 {nodeIcon}
               </span>
             )}
-            <span className="tracking-wider capitalize">{nodes.label}</span>
+            <span className="tracking-wider capitalize">{nodes.displayLabel || nodes.label}</span>
           </div>
         }
         onClick={(event) => handleItemClick(event, nodes.id)}
@@ -498,7 +522,15 @@ function FunctionTab() {
     <div className="h-full mt-4">
       {activeCsvFile ? (
         <div className="h-full flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div
+            className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${isFunctionTabBlocked ? 'opacity-45' : ''}`}
+            onClickCapture={(event) => {
+              if (!isFunctionTabBlocked) return;
+              event.preventDefault();
+              event.stopPropagation();
+              showSelectDatasetToast();
+            }}
+          >
             <SimpleTreeView
               className="text-gray-700"
               expandedNodes={expanded}

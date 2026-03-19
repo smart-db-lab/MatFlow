@@ -17,15 +17,16 @@ export const loginSchema = z.object({
 // Register Schema
 export const registerSchema = z
   .object({
-    username: z
+    first_name: z
       .string()
-      .min(1, "Username is required")
-      .min(3, "Username must be at least 3 characters long")
-      .max(150, "Username must be less than 150 characters")
-      .regex(
-        /^[a-zA-Z0-9_]+$/,
-        "Username can only contain letters, numbers, and underscores"
-      ),
+      .min(1, "First name is required")
+      .min(2, "First name must be at least 2 characters long")
+      .max(100, "First name must be less than 100 characters"),
+    last_name: z
+      .string()
+      .min(1, "Last name is required")
+      .min(2, "Last name must be at least 2 characters long")
+      .max(100, "Last name must be less than 100 characters"),
     email: z
       .string()
       .min(1, "Email is required")
@@ -37,6 +38,11 @@ export const registerSchema = z
       .min(8, "Password must be at least 8 characters long")
       .max(128, "Password must be less than 128 characters"),
     confirm_password: z.string().min(1, "Please confirm your password"),
+    terms_accepted: z
+      .boolean()
+      .refine((value) => value, {
+        message: "Please accept the Terms and Conditions.",
+      }),
   })
   .refine((data) => data.password === data.confirm_password, {
     message: "Passwords don't match",

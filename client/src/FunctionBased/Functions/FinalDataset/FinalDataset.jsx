@@ -112,17 +112,13 @@ function FinalDataset() {
             )}
             {fileNames && fileNames.length > 0 && (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-                    <h2 className="text-base font-semibold text-gray-900 mb-3">
-                        Model-Ready Dataset
+                    <h2 className="text-base font-semibold text-gray-900 mb-2">
+                        Model-Ready Dataset Page
                     </h2>
                     <div className="space-y-2">
                         {fileNames.map((filePath, index) => {
                             const isOpen = openIndex === index;
                             const fileName = filePath.split("/").pop();
-                            const folderPath = filePath.includes("/")
-                                ? filePath.split("/").slice(0, -1).join("/") ||
-                                  "Root"
-                                : "";
 
                             return (
                                 <div
@@ -173,11 +169,6 @@ function FinalDataset() {
 
                                     {isOpen && (
                                         <div className="border-t border-gray-200 px-4 py-3">
-                                            {folderPath && (
-                                                <p className="text-xs text-gray-500 mb-3">
-                                                    Path: {folderPath}
-                                                </p>
-                                            )}
                                             {fileData[index] ? (
                                                 <div className="w-full">
                                                     <AgGridAutoDataComponent
@@ -188,6 +179,7 @@ function FinalDataset() {
                                                         height="600px"
                                                         themeVariant="dataset"
                                                         flatContainer={true}
+                                                        adaptiveHeight={true}
                                                     />
                                                 </div>
                                             ) : (
@@ -210,8 +202,8 @@ function FinalDataset() {
             )}
             {fileNames && fileNames.length === 0 && !error && (
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-                    <h2 className="text-base font-semibold text-gray-900 mb-3">
-                        Model-Ready Dataset
+                    <h2 className="text-base font-semibold text-gray-900 mb-2">
+                        Model-Ready Dataset Page
                     </h2>
                     <p className="text-sm text-gray-600">
                         No dataset files found.

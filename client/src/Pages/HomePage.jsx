@@ -121,7 +121,7 @@ function HomePage() {
 
   const NAVBAR_HEIGHT = 70;
   const SCROLL_OFFSET = NAVBAR_HEIGHT + 14;
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
   const scrollToId = (id) => {
     const el = document.getElementById(id);

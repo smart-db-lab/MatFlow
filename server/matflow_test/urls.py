@@ -36,5 +36,9 @@ urlpatterns = [
     path('deploy_batch/', deploy_batch, name="deploy_batch"),
     path('deploy_batch_status/<str:task_id>/', deploy_batch_status, name="deploy_batch_status"),
     path('deploy_batch_cancel/<str:task_id>/', deploy_batch_cancel, name="deploy_batch_cancel"),
+    path('models_registry/', list_workspace_models, name='models_registry'),
+    path('splits_registry/', list_workspace_splits, name='splits_registry'),
+    path('models_registry/<uuid:model_id>/download/', download_workspace_model, name='download_workspace_model'),
+    path('models_registry/<uuid:model_id>/delete/', delete_workspace_model, name='delete_workspace_model'),
     path('feature_creation/', feature_creation, name="feature_creation"),
 ]

@@ -384,7 +384,7 @@ function AdminDashboard({ serviceKey = "mlflow", title = "Admin Dashboard" }) {
     }
   }, []);
 
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
 
   const fetchJournals = async () => {
@@ -2390,7 +2390,7 @@ function SupportLogoModal({ open, supportLogo, supportLogos = [], onClose, onSav
     }
   };
 
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -2525,7 +2525,7 @@ function HeaderSectionModal({ open, headerSection, onClose, onSave }) {
     }
   };
 
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -2677,7 +2677,7 @@ function HeroImageModal({ open, heroImage, onClose, onSave }) {
     }
   };
 
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -2763,33 +2763,41 @@ function ServiceModal({ open, service, onClose, onSave }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validate required fields
-    if (!formData.service_name || !formData.service_description || !formData.service_url) {
-      toast.error("Please fill in all required fields");
+
+    const serviceName = String(formData.service_name || "").trim();
+    const serviceDescription = String(formData.service_description || "").trim();
+    const serviceUrl = String(formData.service_url || "").trim();
+
+    if (!serviceName) {
+      toast.warning("Service name is required.");
       return;
     }
-    
+
+    if (!serviceUrl) {
+      toast.warning("Service URL is required.");
+      return;
+    }
+
     const fileFromInput = fileInputRef.current?.files?.[0];
     const hasLogo = logoFile || fileFromInput;
-    
+
     if (!service && !hasLogo) {
-      toast.error("Please select a service logo");
+      toast.warning("Service logo is required.");
       return;
     }
-    
+
     setUploading(true);
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append("service_name", formData.service_name);
-      formDataToSend.append("service_description", formData.service_description);
-      formDataToSend.append("service_url", formData.service_url);
-      
+      formDataToSend.append("service_name", serviceName);
+      formDataToSend.append("service_description", serviceDescription);
+      formDataToSend.append("service_url", serviceUrl);
+
       const fileToUpload = logoFile || fileFromInput;
       if (fileToUpload) {
         formDataToSend.append("service_logo", fileToUpload);
       }
-      
+
       await onSave(formDataToSend);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
@@ -2799,12 +2807,12 @@ function ServiceModal({ open, service, onClose, onSave }) {
     }
   };
 
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>{service ? "Edit Service" : "Add Service"}</DialogTitle>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <DialogContent>
           <TextField
             fullWidth
@@ -2824,7 +2832,6 @@ function ServiceModal({ open, service, onClose, onSave }) {
             margin="normal"
             multiline
             rows={4}
-            required
           />
           <TextField
             fullWidth

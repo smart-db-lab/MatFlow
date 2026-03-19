@@ -9,6 +9,7 @@ import LandingPage from "./Pages/LandingPage";
 import ContactPage from "./Pages/ContactPage";
 import FAQPage from "./Pages/FAQPage";
 import Login from "./Pages/Login";
+import Register from "./Pages/Register";
 import AdminLogin from "./Pages/AdminLogin";
 import TempPage from "./TempPage";
 
@@ -17,6 +18,8 @@ import MatflowAdminDashboard from "./Pages/MatflowAdminDashboard";
 import AddArticle from "./Pages/AddArticle";
 import ProfileView from "./Pages/ProfileView";
 import VerifyEmail from "./Pages/VerifyEmail";
+import ForgotPassword from "./Pages/ForgotPassword";
+import ResetPassword from "./Pages/ResetPassword";
 import { AdminRoute, AuthRoute } from "./Components/ProtectedRoute";
 
 // Error Boundary Component
@@ -89,9 +92,11 @@ function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/register" element={<Navigate to="/login?mode=register" replace />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/admin-dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/matflow-admin" element={<AdminRoute><MatflowAdminDashboard /></AdminRoute>} />
           <Route path="/add-article" element={<AdminRoute><AddArticle /></AdminRoute>} />

@@ -3,9 +3,25 @@ import { useSelector } from "react-redux";
 import * as stats from "simple-statistics";
 import AgGridComponent from "../../Components/AgGridComponent/AgGridComponent";
 
+const SUMMARY_HEADER_LABELS = {
+  column: "Property Name",
+  count: "No of Values",
+  min: "Minimum",
+  max: "Maximum",
+  std: "Standard Deviation",
+  mean: "Mean - Average Value",
+  "25%": "25% - First Quartile",
+  "50%": "50% - Median",
+  "75%": "75% - Third Quartile",
+};
+
 function DatasetStatistics({ csvData }) {
   const [columnStats, setColumnStats] = useState([]);
   const activeCsvFile = useSelector((state) => state.uploadedFile.activeFile);
+  const datasetName = useMemo(() => {
+    const rawName = String(activeCsvFile?.name || "").split("/").pop();
+    return rawName || "Selected Dataset";
+  }, [activeCsvFile]);
 
   useEffect(() => {
     if (activeCsvFile && activeCsvFile.name) {
@@ -63,7 +79,7 @@ function DatasetStatistics({ csvData }) {
   const columnDefs = useMemo(() => {
     const columns = Object.keys(columnStats[0] || {});
     return columns.map((column) => ({
-      headerName: column,
+      headerName: SUMMARY_HEADER_LABELS[column] || column,
       field: column,
       valueGetter: (params) => {
         return params.data[column];
@@ -73,11 +89,10 @@ function DatasetStatistics({ csvData }) {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-gray-900">Materials Property Summary</h2>
-        <p className="rounded-md border border-[#D9ECE9] bg-[#F0FDFA] px-3 py-1.5 text-base font-semibold text-[#0F766E]">
-          {columnStats.length} numeric columns
-        </p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold text-gray-900">
+          Materials Property Summary Page - {datasetName}
+        </h2>
       </div>
       <div className="w-full">
         <div className="w-full rounded-xl border border-gray-200 bg-white p-2">

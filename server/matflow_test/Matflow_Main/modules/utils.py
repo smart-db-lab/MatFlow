@@ -1,4 +1,4 @@
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Any, Mapping, Sequence
 import pandas as pd
 import numpy as np
 
@@ -144,3 +144,107 @@ def get_blank_columns(data: pd.DataFrame) -> List[str]:
         List of column names with all null values
     """
     return data.columns[data.isna().all()].to_list()
+
+
+NONE_LIKE_VALUES = {"", "none", "null", "nan", "na"}
+
+
+def get_first_present(payload: Mapping[str, Any], keys: Sequence[str], default: Any = None) -> Any:
+    """Get the first non-None value from payload for any key in keys."""
+    for key in keys:
+        if key in payload and payload.get(key) is not None:
+            return payload.get(key)
+    return default
+
+
+def normalize_none_like(value: Any) -> Any:
+    """Convert common none-like string values to None."""
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in NONE_LIKE_VALUES:
+        return None
+    return value
+
+
+def parse_bool(value: Any, default: bool = False) -> bool:
+    """Parse value to bool with safe defaults."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, np.integer)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+    return default
+
+
+def parse_int(
+    value: Any,
+    default: int,
+    *,
+    min_value: Optional[int] = None,
+    max_value: Optional[int] = None,
+    allow_none: bool = False,
+) -> Optional[int]:
+    """Parse value to int with optional bounds and None support."""
+    value = normalize_none_like(value)
+    if value is None:
+        return None if allow_none else default
+
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+
+    if min_value is not None and parsed < min_value:
+        raise ValueError(f"Value must be >= {min_value}, got {parsed}")
+    if max_value is not None and parsed > max_value:
+        raise ValueError(f"Value must be <= {max_value}, got {parsed}")
+    return parsed
+
+
+def parse_float(
+    value: Any,
+    default: float,
+    *,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+) -> float:
+    """Parse value to float with optional bounds."""
+    value = normalize_none_like(value)
+    if value is None:
+        parsed = default
+    else:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            parsed = default
+
+    if min_value is not None and parsed < min_value:
+        raise ValueError(f"Value must be >= {min_value}, got {parsed}")
+    if max_value is not None and parsed > max_value:
+        raise ValueError(f"Value must be <= {max_value}, got {parsed}")
+    return parsed
+
+
+def parse_choice(value: Any, allowed: Sequence[Any], default: Any) -> Any:
+    """Return value if it exists in allowed choices, otherwise default."""
+    return value if value in allowed else default
+
+
+def params_to_table(params: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    """Convert best parameter dict into table-friendly rows."""
+    return [{"Parameter": key, "Value": value} for key, value in params.items()]
+
+
+def error_payload(message: str, details: Optional[str] = None) -> Dict[str, str]:
+    """Build a consistent JSON error payload."""
+    payload = {"error": message}
+    if details:
+        payload["details"] = details
+    return payload

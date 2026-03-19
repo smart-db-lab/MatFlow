@@ -8,6 +8,7 @@ function ShowDataRegressor({ data, result }) {
         result === "Actual vs. Predicted" ||
         result === "Residuals vs. Predicted" ||
         result === "Histogram of Residuals" ||
+        result === "Quantile-Quantile (Q-Q) Plot" ||
         result === "QQ Plot" ||
         result === "Box Plot of Residuals"
     )

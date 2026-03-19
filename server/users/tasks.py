@@ -1,24 +1,24 @@
 # users/tasks.py
 from celery import shared_task
-from users.emails import send_password_reset_email, send_verification_email
+from users.emails import send_registration_otp_email, send_password_reset_otp_email
 
 @shared_task(bind=True, max_retries=3)
-def send_password_reset_task(self, email, reset_link):
+def send_registration_otp_task(self, email, otp_code):
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    user = User.objects.get(email=email)
     try:
-        return send_password_reset_email(user, reset_link)
+        user = User.objects.get(email=email)
+        return send_registration_otp_email(user, otp_code)
     except Exception as e:
         raise self.retry(exc=e, countdown=30)
 
 @shared_task(bind=True, max_retries=3)
-def send_verification_email_task(self, email, verification_link):
+def send_password_reset_otp_task(self, email, otp_code):
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    user = User.objects.get(email=email)
     try:
-        return send_verification_email(user, verification_link)
+        user = User.objects.get(email=email)
+        return send_password_reset_otp_email(user, otp_code)
     except Exception as e:
         raise self.retry(exc=e, countdown=30)
 

@@ -93,7 +93,7 @@ const filterAndSortArticles = (articles, searchQuery, sortOption) => {
 };
 
 function DatasetsSection({ datasets, loadingDatasets, searchQuery, sortOption }) {
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
   const getDatasetFileUrl = (article) => {
     return article.file_url

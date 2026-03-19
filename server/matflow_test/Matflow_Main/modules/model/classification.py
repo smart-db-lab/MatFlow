@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from Matflow.debug_utilities import debug_function, debug, info, error
 from sklearn.preprocessing import label_binarize
 
-from ...modules.utils import split_xy
+from ...modules.utils import split_xy, error_payload
 from ...modules.classifier import knn, svm, log_reg, decision_tree, random_forest, perceptron
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 import json
@@ -59,6 +59,28 @@ def classification(file):
         target_var = file.get("target_var")
         debug(f"Target variable: {target_var}")
 
+        if train_data.empty or test_data.empty:
+            return JsonResponse(
+                error_payload(
+                    "Dataset format is invalid.",
+                    "Train or test dataset is empty. Please split the dataset first.",
+                ),
+                status=400,
+            )
+        if not target_var:
+            return JsonResponse(
+                error_payload("Target variable is required.", "Please select a target variable."),
+                status=400,
+            )
+        if target_var not in train_data.columns or target_var not in test_data.columns:
+            return JsonResponse(
+                error_payload(
+                    "Target variable was not found in train/test dataset.",
+                    f"Missing target column: {target_var}",
+                ),
+                status=400,
+            )
+
         classifier = file.get("classifier")
         info(f"Selected classifier: {classifier}")
 
@@ -78,6 +100,22 @@ def classification(file):
             debug(f"Failed to drop target variable: {str(e)}")
             pass
 
+        # # Robust alignment: keep only columns that exist in the original untouched dataset.
+        # # This removes any artifacts (like 'id', 'index', 'Unnamed: 0') injected during 
+        # # split or serialization, regardless of their name.
+        # X_source, _ = split_xy(data, target_var)
+        # try:
+        #     X_source = X_source.drop(target_var, axis=1)
+        # except Exception:
+        #     pass
+
+        # valid_features = [col for col in X_train.columns if col in X_source.columns]
+        # if len(valid_features) < len(X_train.columns):
+        #     dropped_cols = set(X_train.columns) - set(valid_features)
+        #     print(f"Removing artifact columns not in original dataset: {dropped_cols}")
+        #     X_train = X_train[valid_features]
+        #     X_test = X_test[valid_features]
+
         # Initialize model based on classifier
         info(f"Initializing {classifier} model")
         if classifier == "K-Nearest Neighbors":
@@ -94,7 +132,13 @@ def classification(file):
             model = perceptron.perceptron(X_train, y_train, file)
         else:
             error(f"Unknown classifier: {classifier}")
-            return JsonResponse({"error": f"Unknown classifier: {classifier}"}, status=400)
+            return JsonResponse(
+                error_payload(
+                    "Invalid classifier selected.",
+                    f"Unsupported classifier: {classifier}",
+                ),
+                status=400,
+            )
 
         debug("Model initialized successfully")
 
@@ -119,7 +163,12 @@ def classification(file):
         try:
             X = X.drop(target_var, axis=1)
         except:
+            print("Error occurred while dropping target variable")
             pass
+        print(f"X_train shape: {X_train.shape},{X_train.columns},\n,data======== {len(data.columns)},{data.columns}") 
+
+        # Ensure X is perfectly aligned with the features used for training
+        # X = X[valid_features]
 
         info("Making predictions on full dataset")
         y_prediction = model.predict(X)
@@ -187,11 +236,20 @@ def classification(file):
         debug("Classification function completed successfully")
         return JsonResponse(obj)
 
+    except ValueError as e:
+        error(f"Validation error in classification function: {str(e)}")
+        return JsonResponse(
+            error_payload("Invalid input value.", str(e)),
+            status=400,
+        )
     except Exception as e:
         error(f"Error in classification function: {str(e)}")
         import traceback
         error(traceback.format_exc())
-        return JsonResponse({"error": str(e)}, status=500)
+        return JsonResponse(
+            error_payload("Failed to build classification model.", str(e)),
+            status=500,
+        )
 
 
 @debug_function

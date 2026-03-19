@@ -41,6 +41,7 @@ next-env.d.ts
 *.csv
 *.tsv
 *.json
+!src/FunctionBased/Functions/EDA/plotGuideConfig.json
 *.xlsx
 *.xls
 
@@ -102,4 +103,3 @@ jspm_packages/
 
 # TernJS port file
 .tern-port
-!package.json

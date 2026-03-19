@@ -14,3 +14,5 @@ Dockerfile
 node_modules
 .vscode
 .idea
+media
+logs

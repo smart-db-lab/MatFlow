@@ -173,6 +173,9 @@ class OurServieceSerializer(serializers.ModelSerializer):
     class Meta:
         model = OurServiece
         fields = "__all__"
+        extra_kwargs = {
+            "service_description": {"required": False, "allow_blank": True},
+        }
     
     def validate(self, data):
         """Validate that logo is provided for new instances."""

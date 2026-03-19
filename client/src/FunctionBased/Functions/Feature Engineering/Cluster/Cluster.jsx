@@ -86,15 +86,9 @@ function Cluster({
       });
 
       setGraphTableData(Data);
+      toast.success("Result generated successfully.");
     } catch (error) {
-      toast.error("Something went wrong. Please try again", {
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-      });
+      toast.error("Operation failed.");
     }
   };
 

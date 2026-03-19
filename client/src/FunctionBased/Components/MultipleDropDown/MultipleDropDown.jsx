@@ -129,7 +129,7 @@ const MultipleDropDown = ({
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: '12px',
-                minHeight: '42px',
+                minHeight: '35px',
                 backgroundColor: '#ffffff',
                 '& fieldset': {
                   borderColor: '#d1d5db',

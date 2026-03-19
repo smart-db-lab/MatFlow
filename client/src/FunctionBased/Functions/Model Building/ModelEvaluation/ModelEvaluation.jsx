@@ -8,14 +8,12 @@ import Plotly from "plotly.js-dist-min";
 import LayoutSelector from "../../../Components/LayoutSelector/LayoutSelector";
 import { toast } from "react-toastify";
 import { getAuthHeaders } from "../../../../util/adminAuth";
-import { fetchDataFromIndexedDB } from "../../../../util/indexDB";
 import AgGridComponent from "../../../Components/AgGridComponent/AgGridComponent";
 import MultipleDropDown from "../../../Components/MultipleDropDown/MultipleDropDown";
 import SingleDropDown from "../../../Components/SingleDropDown/SingleDropDown";
 import Docs from "../../../../Docs/Docs";
 import { apiService } from "../../../../services/api/apiService";
 import { applyPlotlyTheme } from "../../../../shared/plotlyTheme";
-import { syncSplitAndModelCache } from "../../../../util/modelDatasetSync";
 import { getWorkspaceRootFromPath } from "../../../../util/utils";
 import {
     FE_SECTION_TITLE_CLASS,
@@ -25,10 +23,6 @@ import {
 function ModelEvaluation() {
     const dispatch = useDispatch();
     const { projectId } = useParams();
-    const modelsDbName = projectId ? `models:${projectId}` : "models";
-    const splitDbName = projectId
-        ? `splitted_dataset:${projectId}`
-        : "splitted_dataset";
     const [display_type, setDisplayType] = useState("Table");
     const [orientation, setOrientation] = useState("Vertical");
     const [test_dataset, setTestDataset] = useState();
@@ -42,9 +36,12 @@ function ModelEvaluation() {
     const [graphData, setGraphData] = useState();
     const [notFound, setNotFound] = useState(false);
     const [allModelName, setAllModelName] = useState();
+    const [modelsByDataset, setModelsByDataset] = useState({});
+    const [datasetModelOrderMap, setDatasetModelOrderMap] = useState({});
     const [selectedSplitFolder, setSelectedSplitFolder] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const modelEvalPlotRef = useRef(null);
+    const hasUserSelectedDatasetRef = useRef(false);
 
     const [visible, setVisible] = useState(false);
 
@@ -54,27 +51,54 @@ function ModelEvaluation() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const synced = await syncSplitAndModelCache(projectId);
-                const tempDatasetName = synced.splitNames || [];
-                const tempModels = synced.modelEntries || [];
+                const serverRegistry = await apiService.matflow.ml
+                    .listModelsRegistry(projectId)
+                    .catch(() => null);
+                const serverModels = Array.isArray(serverRegistry?.models)
+                    ? serverRegistry.models
+                    : [];
+                const orderedRows = [...serverModels].sort(
+                    (a, b) =>
+                        new Date(b?.updated_at || 0).getTime() -
+                        new Date(a?.updated_at || 0).getTime(),
+                );
+                const grouped = {};
+                const datasetOrder = [];
+                const modelOrderByDataset = {};
+                const seenModelByDataset = {};
+
+                orderedRows.forEach((row) => {
+                    const datasetName = String(row?.dataset_name || "").trim();
+                    const modelName = String(row?.model_name || "").trim();
+                    if (!datasetName || !modelName) return;
+                    if (!grouped[datasetName]) {
+                        grouped[datasetName] = {};
+                        datasetOrder.push(datasetName);
+                        modelOrderByDataset[datasetName] = [];
+                        seenModelByDataset[datasetName] = new Set();
+                    }
+                    if (!seenModelByDataset[datasetName].has(modelName)) {
+                        seenModelByDataset[datasetName].add(modelName);
+                        modelOrderByDataset[datasetName].push(modelName);
+                    }
+                    grouped[datasetName][modelName] = {
+                        metrics_table: row?.metrics_table || {},
+                        split_folder: row?.split_folder || "",
+                    };
+                });
+                const tempDatasetName = datasetOrder;
+                setModelsByDataset(grouped);
+                setDatasetModelOrderMap(modelOrderByDataset);
                 setAllDatasetName(tempDatasetName);
 
-                // Check if ANY models exist for ANY dataset
-                const hasModels = tempModels.some((model) => {
-                    const datasetName = Object.keys(model)[0];
-                    return (
-                        model[datasetName] &&
-                        Object.keys(model[datasetName]).length > 0
-                    );
-                });
+                const hasModels = tempDatasetName.some(
+                    (datasetName) =>
+                        grouped[datasetName] &&
+                        Object.keys(grouped[datasetName]).length > 0,
+                );
 
                 setNotFound(!hasModels);
 
-                // If datasets exist, set initial model data for first dataset
-                if (tempDatasetName.length > 0) {
-                    const firstDatasetName = tempDatasetName[0];
-                    handleChangeDataset(firstDatasetName);
-                }
             } catch (error) {
                 console.error("Error loading models:", error);
                 setNotFound(true);
@@ -84,37 +108,33 @@ function ModelEvaluation() {
         fetchData();
     }, [projectId]);
 
-    const handleChangeDataset = async (e) => {
+    useEffect(() => {
+        if (!Array.isArray(allDatasetName) || allDatasetName.length === 0) return;
+        const hasValidDataset =
+            !!test_dataset && allDatasetName.includes(test_dataset);
+        if (hasUserSelectedDatasetRef.current && hasValidDataset) return;
+
+        const nextDataset = hasValidDataset ? test_dataset : allDatasetName[0];
+        if (nextDataset && nextDataset !== test_dataset) {
+            handleChangeDataset(nextDataset, undefined, { fromAuto: true });
+        }
+    }, [allDatasetName, datasetModelOrderMap, modelsByDataset, test_dataset]);
+
+    const handleChangeDataset = async (
+        e,
+        datasetModelMap = modelsByDataset,
+        options = {},
+    ) => {
+        const { fromAuto = false } = options;
+        hasUserSelectedDatasetRef.current = !fromAuto;
         setColumnDefs();
         setTestDataset(e);
-        let tempDatasets = await fetchDataFromIndexedDB(splitDbName).catch(
-            () => [],
-        );
-        tempDatasets = (tempDatasets || []).map((val) => {
-            if (Object.keys(val || {})[0] === e) {
-                return val[e];
-            }
-            return undefined;
-        });
-        tempDatasets = tempDatasets.filter(
-            (val) => val !== undefined && val !== null,
-        )[0];
+        const tempModels = datasetModelMap?.[e] || {};
+        const orderedModels = datasetModelOrderMap?.[e] || Object.keys(tempModels);
+        const firstModelName = orderedModels[0];
         setSelectedSplitFolder(
-            Array.isArray(tempDatasets) ? tempDatasets[5] || "" : "",
+            firstModelName ? tempModels[firstModelName]?.split_folder || "" : "",
         );
-
-        let tempModels = await fetchDataFromIndexedDB(modelsDbName).catch(
-            () => [],
-        );
-        tempModels = (tempModels || []).map((val) => {
-            if (Object.keys(val || {})[0] === e) {
-                return val[e];
-            }
-            return undefined;
-        });
-        tempModels = tempModels.filter(
-            (val) => val !== undefined && val !== null,
-        )[0];
 
         if (!tempModels || Object.keys(tempModels).length === 0) {
             setAllModelName([]);
@@ -123,7 +143,7 @@ function ModelEvaluation() {
             return;
         }
 
-        const keys = Object.keys(tempModels);
+        const keys = orderedModels;
 
         let temp = keys.map((val) => {
             return { ...tempModels[val].metrics_table, name: val };
@@ -274,7 +294,7 @@ function ModelEvaluation() {
             </div>
         );
     return (
-        <div className="w-full h-full flex flex-col gap-4">
+        <div className="w-full h-full flex flex-col gap-4 matflow-unified-input-height">
             <div className="flex-1 flex gap-5">
                 {/* ── Left Panel: Controls ── */}
                 <div className="w-[340px] min-w-[300px] max-w-[400px]">
@@ -295,8 +315,11 @@ function ModelEvaluation() {
                                 <SingleDropDown
                                     columnNames={allDatasetName}
                                     onValueChange={(e) =>
-                                        handleChangeDataset(e)
+                                        handleChangeDataset(e, undefined, {
+                                            fromAuto: false,
+                                        })
                                     }
+                                    initValue={test_dataset}
                                 />
                             </div>
 
@@ -653,14 +676,15 @@ function ModelEvaluation() {
                                                 trace?.type === "bar"
                                                     ? {
                                                           ...trace,
-                                                          width: 0.45,
+                                                          // Keep bars visually slimmer like EDA bar charts.
+                                                          width: 0.22,
                                                       }
                                                     : trace,
                                         )}
                                         layout={applyPlotlyTheme({
                                             ...(graphData?.layout || {}),
-                                            bargap: 0.45,
-                                            bargroupgap: 0.2,
+                                            bargap: 0.62,
+                                            bargroupgap: 0.32,
                                         })}
                                         config={{
                                             editable: true,
