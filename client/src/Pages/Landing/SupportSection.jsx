@@ -1,7 +1,7 @@
 import React from "react";
 
 function SupportSection({ supportLogos, loadingSupportLogos }) {
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
   const orderedSupportLogos = [...(Array.isArray(supportLogos) ? supportLogos : [])].sort(
     (a, b) => (a.order ?? 0) - (b.order ?? 0) || (b.id ?? 0) - (a.id ?? 0)
   );

@@ -1,18 +1,24 @@
 import { Input, Modal } from "../Feature Engineering/muiCompat";
-import { CircularProgress } from "@mui/material";
+import { CircularProgress, LinearProgress } from "@mui/material";
 import React, { useEffect, useRef, useState } from "react";
 import Papa from "papaparse";
 import { useParams } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import AgGridComponent from "../../Components/AgGridComponent/AgGridComponent";
 import MultipleDropDown from "../../Components/MultipleDropDown/MultipleDropDown";
 import SingleDropDown from "../../Components/SingleDropDown/SingleDropDown";
-import { ReadFile } from "../../../util/utils";
+import { setReRender } from "../../../Slices/UploadedFileSlice";
+import { ReadFile, getWorkspaceRootFromPath } from "../../../util/utils";
 import Docs from "../../../Docs/Docs";
 import { apiService } from "../../../services/api/apiService";
-import { syncSplitAndModelCache } from "../../../util/modelDatasetSync";
 
 function ModelDeployment({ csvData }) {
+    const dispatch = useDispatch();
+    const rerender = useSelector((state) => state.uploadedFile.rerender);
+    const activeWorkspaceId = useSelector(
+        (state) => state.workspace?.activeWorkspaceId,
+    );
     const [allColumnNames, setAllColumnNames] = useState([]);
     const [allColumnValues, setAllColumnValues] = useState([]);
     const [modelInputSchema, setModelInputSchema] = useState([]);
@@ -21,8 +27,8 @@ function ModelDeployment({ csvData }) {
     const [filtered_column, setFilteredColumn] = useState(allColumnValues);
     const [train_data, setTrainData] = useState();
     const [target_val, setTargetVal] = useState();
+    const [currentModelId, setCurrentModelId] = useState("");
     const [current_model, setCurrentModel] = useState();
-    const [model_deploy, setModelDeploy] = useState();
     const [pred_result, setPredResult] = useState();
     const [catalogLoading, setCatalogLoading] = useState(true);
     const [singleLoading, setSingleLoading] = useState(false);
@@ -41,6 +47,11 @@ function ModelDeployment({ csvData }) {
     const [batchPreviewRows, setBatchPreviewRows] = useState([]);
     const [batchStatus, setBatchStatus] = useState("IDLE");
     const [batchTaskId, setBatchTaskId] = useState("");
+    const [batchProgress, setBatchProgress] = useState({
+        processed: 0,
+        total: 0,
+        percent: 0,
+    });
     const batchFileRef = useRef(null);
     const batchPollTimerRef = useRef(null);
     const batchPollInFlightRef = useRef(false);
@@ -50,34 +61,23 @@ function ModelDeployment({ csvData }) {
     const openModal = () => setVisible(true);
     const closeModal = () => setVisible(false);
 
-    const buildModelCatalog = (modelEntries = [], splitEntries = []) => {
-        const splitMetaByName = new Map(
-            (splitEntries || []).map((entry) => [
-                Object.keys(entry)[0],
-                entry[Object.keys(entry)[0]],
-            ]),
-        );
-
+    const buildModelCatalog = (registryRows = []) => {
         const flattened = [];
-        (modelEntries || []).forEach((entry) => {
-            const datasetName = Object.keys(entry || {})[0];
-            if (!datasetName) return;
-            const modelsForDataset = entry[datasetName] || {};
-            const splitMeta = splitMetaByName.get(datasetName);
-            Object.keys(modelsForDataset).forEach((modelName) => {
-                const modelInfo = modelsForDataset[modelName] || {};
-                flattened.push({
-                    id: `${datasetName}::${modelName}`,
-                    label: modelName,
-                    datasetName,
-                    targetVar: Array.isArray(splitMeta) ? splitMeta[3] : "",
-                    folder: Array.isArray(splitMeta) ? splitMeta[5] : "",
-                    trainFile: Array.isArray(splitMeta) ? splitMeta[1] : "",
-                    modelDeploy: modelInfo?.model_deploy || "",
-                    inputSchema: Array.isArray(modelInfo?.input_schema)
-                        ? modelInfo.input_schema
-                        : [],
-                });
+        (registryRows || []).forEach((row) => {
+            const datasetName = String(row?.dataset_name || "").trim();
+            const modelName = String(row?.model_name || "").trim();
+            if (!datasetName || !modelName) return;
+            flattened.push({
+                id: String(row?.id || `${datasetName}::${modelName}`),
+                label: modelName,
+                datasetName,
+                workspaceId: row?.workspace_id || "",
+                targetVar: row?.target_var || "",
+                folder: row?.split_folder || "",
+                trainFile: row?.train_filename || "",
+                inputSchema: Array.isArray(row?.input_schema)
+                    ? row.input_schema
+                    : [],
             });
         });
 
@@ -88,10 +88,13 @@ function ModelDeployment({ csvData }) {
         const fetchData = async () => {
             setCatalogLoading(true);
             try {
-                const synced = await syncSplitAndModelCache(projectId);
-                const res = synced.modelEntries || [];
-                const sp_data = synced.splitEntries || [];
-                setModelCatalog(buildModelCatalog(res, sp_data));
+                const serverRegistry = await apiService.matflow.ml
+                    .listModelsRegistry(projectId)
+                    .catch(() => null);
+                const rows = Array.isArray(serverRegistry?.models)
+                    ? serverRegistry.models
+                    : [];
+                setModelCatalog(buildModelCatalog(rows));
             } catch {
                 setModelCatalog([]);
             } finally {
@@ -149,6 +152,7 @@ function ModelDeployment({ csvData }) {
         setBatchPreviewRows([]);
         setBatchTaskId("");
         setBatchStatus("IDLE");
+        setBatchProgress({ processed: 0, total: 0, percent: 0 });
         setFeatureSearch("");
         setSinglePage(1);
         setUseSourceSample(false);
@@ -157,14 +161,15 @@ function ModelDeployment({ csvData }) {
         setAllColumnValues([]);
         setFilteredColumn([]);
         setModelInputSchema([]);
+        setCurrentModelId("");
         setCurrentModel(selectedLabel);
         const selectedModelMeta = (modelCatalog || []).find(
             (item) => item.label === selectedLabel,
         );
         if (!selectedModelMeta) return;
 
+        setCurrentModelId(String(selectedModelMeta.id || ""));
         setTargetVal(selectedModelMeta.targetVar || "");
-        setModelDeploy(selectedModelMeta.modelDeploy || "");
 
         const savedSchema = Array.isArray(selectedModelMeta.inputSchema)
             ? selectedModelMeta.inputSchema
@@ -173,10 +178,8 @@ function ModelDeployment({ csvData }) {
         if (savedSchema.length > 0) {
             const deploymentInputs = savedSchema.map((feature) => ({
                 ...feature,
-                value:
-                    feature?.value === undefined || feature?.value === null
-                        ? ""
-                        : feature.value,
+                // Keep single-prediction inputs empty on initial load.
+                value: "",
             }));
             setModelInputSchema(deploymentInputs);
             setAllColumnValues(deploymentInputs);
@@ -191,11 +194,38 @@ function ModelDeployment({ csvData }) {
             return;
         }
 
-        const train = await ReadFile({
-            projectId,
-            foldername: selectedModelMeta.folder || "",
-            filename: `${selectedModelMeta.trainFile}`,
-        });
+        let train;
+        try {
+            console.log(
+                "[ModelDeployment] Reading train file for selected model",
+                {
+                    modelId: selectedModelMeta.id,
+                    modelName: selectedModelMeta.label,
+                    workspaceId: selectedModelMeta.workspaceId,
+                    logicalFolder: selectedModelMeta.folder || "train_test",
+                    trainFile: selectedModelMeta.trainFile,
+                },
+            );
+            train = await ReadFile({
+                projectId,
+                workspaceId: selectedModelMeta.workspaceId || undefined,
+                logicalFolder: selectedModelMeta.folder || "train_test",
+                foldername: selectedModelMeta.folder || "",
+                filename: `${selectedModelMeta.trainFile}`,
+            });
+        } catch (err) {
+            console.error("[ModelDeployment] Train file read failed", {
+                modelId: selectedModelMeta.id,
+                workspaceId: selectedModelMeta.workspaceId,
+                logicalFolder: selectedModelMeta.folder || "train_test",
+                trainFile: selectedModelMeta.trainFile,
+                error: err,
+            });
+            toast.error(
+                `Train file not found for selected model (${selectedModelMeta.trainFile}). Please re-build model or verify workspace files.`,
+            );
+            return;
+        }
 
         setTrainData(train);
 
@@ -207,8 +237,8 @@ function ModelDeployment({ csvData }) {
         }
 
         const data = await apiService.matflow.deployment.deployData({
-            train,
-            target_var: selectedModelMeta.targetVar,
+            model_id: String(selectedModelMeta.id || ""),
+            project_id: projectId,
         });
 
         if (data?.error) {
@@ -243,20 +273,15 @@ function ModelDeployment({ csvData }) {
 
     const handleChangeValue = (ind, value) => {
         const updated = filtered_column.map((val, i) => {
-                if (i === ind) {
-                    let parsedValue = value;
-                    if (val.data_type === "float") {
-                        parsedValue = value === "" ? "" : parseFloat(value);
-                    } else if (val.data_type === "int") {
-                        parsedValue = value === "" ? "" : parseInt(value, 10);
-                    }
-                    return {
-                        ...val,
-                        value: parsedValue,
-                    };
-                }
-                return val;
-            });
+            if (i === ind) {
+                return {
+                    ...val,
+                    // Keep raw typed value; validate/cast right before submission.
+                    value,
+                };
+            }
+            return val;
+        });
         setFilteredColumn(updated);
 
         if (useSourceSample) {
@@ -281,32 +306,135 @@ function ModelDeployment({ csvData }) {
         setSelectColumns(mode);
     };
 
+    const normalizeDataType = (dataType) =>
+        String(dataType || "")
+            .trim()
+            .toLowerCase();
+
+    const isIntegerType = (dataType) =>
+        ["int", "int64", "int32", "integer", "long"].includes(dataType);
+
+    const isFloatType = (dataType) =>
+        [
+            "float",
+            "float64",
+            "float32",
+            "double",
+            "number",
+            "decimal",
+        ].includes(dataType);
+
+    const isNumericType = (dataType) =>
+        isIntegerType(dataType) || isFloatType(dataType);
+
+    const isNumericString = (value) => {
+        if (typeof value === "number") return Number.isFinite(value);
+        if (typeof value !== "string") return false;
+        const trimmed = value.trim();
+        if (!trimmed) return false;
+        return !Number.isNaN(Number(trimmed));
+    };
+
     const castValueByType = (rawValue, dataType) => {
+        const normalizedType = normalizeDataType(dataType);
         if (rawValue === null || rawValue === undefined || rawValue === "") {
             return "";
         }
-        if (dataType === "float") {
+        if (isFloatType(normalizedType)) {
             const parsed = parseFloat(rawValue);
-            return Number.isNaN(parsed) ? "" : parsed;
+            // Fall back to raw string when schema type is wrong (e.g. Smiles marked float).
+            return Number.isNaN(parsed) ? String(rawValue) : parsed;
         }
-        if (dataType === "int") {
+        if (isIntegerType(normalizedType)) {
             const parsed = parseInt(rawValue, 10);
-            return Number.isNaN(parsed) ? "" : parsed;
+            return Number.isNaN(parsed) ? String(rawValue) : parsed;
         }
         return rawValue;
     };
 
-    const applyUploadedRowValues = (baseInputs, firstRow) => {
+    const normalizeColumnKey = (key) =>
+        String(key || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[\s_\-]+/g, "");
+
+    const getRowValueByFeatureKey = (row, featureKey) => {
+        if (!row || typeof row !== "object") return undefined;
+        if (Object.prototype.hasOwnProperty.call(row, featureKey)) {
+            return row[featureKey];
+        }
+
+        const featureKeyLower = String(featureKey || "").toLowerCase();
+        const exactCaseInsensitiveKey = Object.keys(row).find(
+            (rowKey) => String(rowKey || "").toLowerCase() === featureKeyLower,
+        );
+        if (exactCaseInsensitiveKey) {
+            return row[exactCaseInsensitiveKey];
+        }
+
+        const normalizedFeatureKey = normalizeColumnKey(featureKey);
+        const normalizedKeyMatch = Object.keys(row).find(
+            (rowKey) => normalizeColumnKey(rowKey) === normalizedFeatureKey,
+        );
+        if (normalizedKeyMatch) {
+            return row[normalizedKeyMatch];
+        }
+
+        return undefined;
+    };
+
+    const isEmptyCellValue = (value) =>
+        value === null ||
+        value === undefined ||
+        (typeof value === "string" && value.trim() === "");
+
+    const getFirstNonEmptyFeatureValue = (rows, featureKey) => {
+        if (!Array.isArray(rows) || rows.length === 0) return undefined;
+        for (const row of rows) {
+            const candidate = getRowValueByFeatureKey(row, featureKey);
+            if (!isEmptyCellValue(candidate)) {
+                return candidate;
+            }
+        }
+        return getRowValueByFeatureKey(rows[0], featureKey);
+    };
+
+    const shouldUseNumberInput = (feature) => {
+        const normalizedType = normalizeDataType(feature?.data_type);
+        if (!isNumericType(normalizedType)) return false;
+
+        const normalizedCol = normalizeColumnKey(feature?.col);
+        if (normalizedCol.includes("smiles")) return false;
+
+        const currentValue = feature?.value;
         if (
-            !Array.isArray(baseInputs) ||
-            baseInputs.length === 0 ||
-            !firstRow
+            typeof currentValue === "string" &&
+            currentValue.trim() !== "" &&
+            !isNumericString(currentValue)
         ) {
+            return false;
+        }
+        return true;
+    };
+
+    const applyUploadedRowValues = (baseInputs, sourceRows) => {
+        if (!Array.isArray(baseInputs) || baseInputs.length === 0) {
             return baseInputs || [];
+        }
+        const rows = Array.isArray(sourceRows)
+            ? sourceRows
+            : sourceRows
+              ? [sourceRows]
+              : [];
+        if (rows.length === 0) {
+            return baseInputs;
         }
         return baseInputs.map((feature) => ({
             ...feature,
-            value: castValueByType(firstRow?.[feature.col], feature.data_type),
+            value: castValueByType(
+                getFirstNonEmptyFeatureValue(rows, feature.col),
+                feature.data_type,
+            ),
         }));
     };
 
@@ -315,7 +443,7 @@ function ModelDeployment({ csvData }) {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (!model_deploy) {
+        if (!currentModelId) {
             toast.error("Please select a model first.");
             e.target.value = "";
             return;
@@ -323,6 +451,7 @@ function ModelDeployment({ csvData }) {
 
         setBatchResult(null);
         setBatchPreviewRows([]);
+        setBatchProgress({ processed: 0, total: 0, percent: 0 });
         setBatchLoading(true);
 
         if (!Array.isArray(modelInputSchema) || modelInputSchema.length === 0) {
@@ -394,7 +523,7 @@ function ModelDeployment({ csvData }) {
 
         const sourceFilledInputs = applyUploadedRowValues(
             modelInputSchema,
-            train_data[0],
+            train_data,
         );
         setAllColumnValues(sourceFilledInputs);
         setAllColumnNames(sourceFilledInputs.map((val) => val.col));
@@ -446,6 +575,7 @@ function ModelDeployment({ csvData }) {
             if (statusData?.error && !statusData?.status) {
                 setBatchStatus("FAILURE");
                 setBatchLoading(false);
+                setBatchProgress({ processed: 0, total: 0, percent: 0 });
                 stopBatchPolling();
                 toast.error(statusData.error);
                 return;
@@ -454,11 +584,32 @@ function ModelDeployment({ csvData }) {
             const state = statusData?.status;
             if (state === "PENDING") {
                 setBatchStatus("PENDING");
+                setBatchProgress((prev) => ({
+                    processed: 0,
+                    total:
+                        Number(statusData?.total || 0) ||
+                        Number(prev.total || 0),
+                    percent: 0,
+                }));
                 return;
             }
 
             if (state === "PROGRESS") {
                 setBatchStatus("PROGRESS");
+                const processed = Number(statusData?.processed || 0);
+                const total = Number(statusData?.total || 0);
+                const rawPercent =
+                    statusData?.percent !== undefined && statusData?.percent !== null
+                        ? Number(statusData.percent)
+                        : total > 0
+                          ? (processed / total) * 100
+                          : 0;
+                const safePercent = Math.max(0, Math.min(100, rawPercent || 0));
+                setBatchProgress({
+                    processed,
+                    total,
+                    percent: safePercent,
+                });
                 return;
             }
 
@@ -477,6 +628,7 @@ function ModelDeployment({ csvData }) {
                 });
                 setBatchLoading(false);
                 setBatchTaskId("");
+                setBatchProgress({ processed: 1, total: 1, percent: 100 });
                 stopBatchPolling();
                 toast.success("Batch prediction completed.");
                 return;
@@ -486,6 +638,7 @@ function ModelDeployment({ csvData }) {
                 setBatchStatus("CANCELLED");
                 setBatchLoading(false);
                 setBatchTaskId("");
+                setBatchProgress({ processed: 0, total: 0, percent: 0 });
                 stopBatchPolling();
                 toast.info("Batch prediction cancelled.");
                 return;
@@ -495,14 +648,21 @@ function ModelDeployment({ csvData }) {
                 setBatchStatus("FAILURE");
                 setBatchLoading(false);
                 setBatchTaskId("");
+                setBatchProgress({ processed: 0, total: 0, percent: 0 });
                 stopBatchPolling();
-                toast.error(statusData?.error || "Batch prediction failed.");
+                const details = String(statusData?.details || "").trim();
+                toast.error(
+                    details
+                        ? `${statusData?.error || "Batch prediction failed."}\n${details}`
+                        : statusData?.error || "Batch prediction failed.",
+                );
                 return;
             }
         } catch (error) {
             setBatchStatus("FAILURE");
             setBatchLoading(false);
             setBatchTaskId("");
+            setBatchProgress({ processed: 0, total: 0, percent: 0 });
             stopBatchPolling();
             toast.error(error?.message || "Failed while polling batch status.");
         } finally {
@@ -515,12 +675,15 @@ function ModelDeployment({ csvData }) {
             stopBatchPolling();
             setBatchLoading(false);
             setBatchStatus("CANCELLED");
+            setBatchProgress({ processed: 0, total: 0, percent: 0 });
             return;
         }
 
         try {
             const cancelResponse =
-                await apiService.matflow.deployment.deployBatchCancel(batchTaskId);
+                await apiService.matflow.deployment.deployBatchCancel(
+                    batchTaskId,
+                );
             if (cancelResponse?.error) {
                 toast.error(cancelResponse.error);
                 return;
@@ -529,6 +692,7 @@ function ModelDeployment({ csvData }) {
             setBatchLoading(false);
             setBatchStatus("CANCELLED");
             setBatchTaskId("");
+            setBatchProgress({ processed: 0, total: 0, percent: 0 });
             toast.info("Batch prediction cancelled.");
         } catch (error) {
             toast.error(error?.message || "Failed to cancel batch prediction.");
@@ -548,7 +712,7 @@ function ModelDeployment({ csvData }) {
             return;
         }
 
-        if (!model_deploy || !Array.isArray(train_data) || !target_val) {
+        if (!currentModelId) {
             toast.error(
                 "Model artifacts are not ready. Please re-select model.",
             );
@@ -561,18 +725,23 @@ function ModelDeployment({ csvData }) {
             setBatchResult(null);
             setBatchTaskId("");
             setBatchStatus("QUEUED");
+            setBatchProgress({
+                processed: 0,
+                total: batchPreviewRows.length || 0,
+                percent: 0,
+            });
 
             const enqueueResponse =
                 await apiService.matflow.deployment.deployBatch({
-                    model_deploy,
-                    train: train_data,
-                    target_var: target_val,
+                    model_id: currentModelId,
+                    project_id: projectId,
                     batch_data: batchPreviewRows,
                 });
 
             if (enqueueResponse?.error) {
                 setBatchStatus("FAILURE");
                 setBatchLoading(false);
+                setBatchProgress({ processed: 0, total: 0, percent: 0 });
                 toast.error(enqueueResponse.error);
                 return;
             }
@@ -580,6 +749,7 @@ function ModelDeployment({ csvData }) {
             if (!enqueueResponse?.task_id) {
                 setBatchStatus("FAILURE");
                 setBatchLoading(false);
+                setBatchProgress({ processed: 0, total: 0, percent: 0 });
                 toast.error("Task id was not returned by server.");
                 return;
             }
@@ -596,11 +766,12 @@ function ModelDeployment({ csvData }) {
             setBatchStatus("FAILURE");
             setBatchLoading(false);
             setBatchTaskId("");
+            setBatchProgress({ processed: 0, total: 0, percent: 0 });
             toast.error(error?.message || "Failed to start batch prediction.");
         }
     };
 
-    const downloadBatchCSV = (rows, filename) => {
+    const downloadBatchCSV = async (rows, filename) => {
         if (!rows || rows.length === 0) return;
         const csv = Papa.unparse(rows);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -610,28 +781,61 @@ function ModelDeployment({ csvData }) {
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
+
+        if (!projectId) return;
+        try {
+            const selectedModelMeta = (modelCatalog || []).find(
+                (item) => String(item?.id || "") === String(currentModelId || ""),
+            );
+            const resolvedWorkspaceId =
+                activeWorkspaceId || selectedModelMeta?.workspaceId || "";
+            const workspaceRoot = getWorkspaceRootFromPath(
+                selectedModelMeta?.folder || "",
+            );
+            const targetFolder = resolvedWorkspaceId
+                ? "output/generated_datasets"
+                : `${workspaceRoot}/output/generated_datasets`;
+
+            if (!resolvedWorkspaceId && !workspaceRoot) {
+                toast.warning(
+                    "Download completed. Workspace context not found, so project save was skipped.",
+                );
+                return;
+            }
+
+            await apiService.matflow.dataset.createFile(
+                projectId,
+                rows,
+                filename,
+                targetFolder,
+                resolvedWorkspaceId || undefined,
+            );
+            dispatch(setReRender(!rerender));
+            toast.success("Dataset Saved to Project Output.");
+        } catch (err) {
+            toast.error(err?.message || "Downloaded, but failed to save dataset.");
+        }
+    };
+    const formatPredictionValue = (value) => {
+        if (value === null || value === undefined || value === "") return "--";
+        const numeric =
+            typeof value === "number"
+                ? value
+                : typeof value === "string"
+                  ? Number(value)
+                  : NaN;
+        if (Number.isFinite(numeric)) {
+            return numeric.toFixed(4);
+        }
+        return String(value);
     };
 
     const handleSave = async () => {
         setSingleLoading(true);
         try {
-            if (!model_deploy || typeof model_deploy !== "string") {
+            if (!currentModelId) {
                 toast.error(
                     "Model is not ready. Please re-select dataset/model and try again.",
-                );
-                return;
-            }
-
-            if (!Array.isArray(train_data) || train_data.length === 0) {
-                toast.error(
-                    "Training data is missing. Please re-select the dataset.",
-                );
-                return;
-            }
-
-            if (!target_val) {
-                toast.error(
-                    "Target variable is missing. Please re-select the dataset.",
                 );
                 return;
             }
@@ -649,32 +853,42 @@ function ModelDeployment({ csvData }) {
                     );
                     return;
                 }
-                if (
-                    (val?.data_type === "float" || val?.data_type === "int") &&
-                    Number.isNaN(rawValue)
-                ) {
+                const normalizedType = normalizeDataType(val?.data_type);
+                const numericInput = shouldUseNumberInput(val);
+                if (numericInput && !isNumericString(rawValue)) {
                     toast.error(
                         `Please enter a valid numeric value for ${val?.col || "input field"}.`,
                     );
                     return;
                 }
-                result = { ...result, [val.col]: rawValue };
+                const finalValue =
+                    numericInput && isIntegerType(normalizedType)
+                        ? parseInt(rawValue, 10)
+                        : numericInput && isFloatType(normalizedType)
+                          ? parseFloat(rawValue)
+                          : rawValue;
+                result = { ...result, [val.col]: finalValue };
             }
 
             const dat = await apiService.matflow.deployment.deployResult({
-                model_deploy,
+                model_id: currentModelId,
+                project_id: projectId,
                 result,
-                train: train_data,
-                target_var: target_val,
             });
 
             if (dat?.error) {
-                toast.error(dat.error);
+                const details = String(dat?.details || "").trim();
+                toast.error(details ? `${dat.error}\n${details}` : dat.error);
                 return;
             }
 
             setPredResult(dat.pred ?? "");
         } catch (error) {
+            console.error("[ModelDeployment] deployResult submit failed", {
+                modelId: currentModelId,
+                projectId,
+                error,
+            });
             toast.error(
                 error?.message ||
                     "Prediction failed. Please check inputs and try again.",
@@ -753,7 +967,7 @@ function ModelDeployment({ csvData }) {
         },
     ];
     return (
-        <div className="my-4">
+        <div className="my-4 matflow-unified-input-height">
             <div>
                 <p className="mb-1 text-sm font-medium text-gray-700">
                     Select Model
@@ -765,28 +979,80 @@ function ModelDeployment({ csvData }) {
             </div>
             {current_model && (
                 <>
-                    {/* ── Mode toggle ── */}
-                    <div className="mt-4 flex gap-2">
-                        <button
-                            onClick={() => setPredMode("single")}
-                            className={`px-5 py-2 rounded-md text-sm font-medium border-2 transition-colors ${
-                                predMode === "single"
-                                    ? "bg-white border-primary-btn text-primary-btn shadow-[0_0_0_2px_rgba(13,148,136,0.18)]"
-                                    : "border-gray-300 bg-white text-gray-600 hover:border-primary-btn hover:text-primary-btn"
-                            }`}
-                        >
-                            Single Prediction
-                        </button>
-                        <button
-                            onClick={() => setPredMode("batch")}
-                            className={`px-5 py-2 rounded-md text-sm font-medium border-2 transition-colors ${
-                                predMode === "batch"
-                                    ? "bg-white border-primary-btn text-primary-btn shadow-[0_0_0_2px_rgba(13,148,136,0.18)]"
-                                    : "border-gray-300 bg-white text-gray-600 hover:border-primary-btn hover:text-primary-btn"
-                            }`}
-                        >
-                            Batch Prediction
-                        </button>
+                    {/* ── Mode toggle + batch actions ── */}
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setPredMode("single")}
+                                className={`px-5 py-2 rounded-md text-sm font-medium border-2 transition-colors ${
+                                    predMode === "single"
+                                        ? "bg-white border-primary-btn text-primary-btn shadow-[0_0_0_2px_rgba(13,148,136,0.18)]"
+                                        : "border-gray-300 bg-white text-gray-600 hover:border-primary-btn hover:text-primary-btn"
+                                }`}
+                            >
+                                Single Prediction
+                            </button>
+                            <button
+                                onClick={() => setPredMode("batch")}
+                                className={`px-5 py-2 rounded-md text-sm font-medium border-2 transition-colors ${
+                                    predMode === "batch"
+                                        ? "bg-white border-primary-btn text-primary-btn shadow-[0_0_0_2px_rgba(13,148,136,0.18)]"
+                                        : "border-gray-300 bg-white text-gray-600 hover:border-primary-btn hover:text-primary-btn"
+                                }`}
+                            >
+                                Batch Prediction
+                            </button>
+                        </div>
+
+                        {predMode === "batch" && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <label className="cursor-pointer">
+                                    <span
+                                        className={`inline-flex items-center px-5 py-2 rounded-md text-sm font-medium border-2 border-primary-btn bg-primary-btn text-white transition-colors ${
+                                            batchLoading
+                                                ? "opacity-50 cursor-not-allowed"
+                                                : "hover:bg-opacity-90"
+                                        }`}
+                                    >
+                                        {batchLoading
+                                            ? "Working..."
+                                            : "Upload Dataset (CSV)"}
+                                    </span>
+                                    <input
+                                        ref={batchFileRef}
+                                        type="file"
+                                        accept=".csv"
+                                        className="hidden"
+                                        disabled={batchLoading}
+                                        onChange={handleBatchFile}
+                                    />
+                                </label>
+
+                                <button
+                                    type="button"
+                                    onClick={runBatchPrediction}
+                                    disabled={batchLoading}
+                                    className={`px-5 py-2 rounded-md text-sm font-medium border-2 border-primary-btn bg-primary-btn text-white transition-colors ${
+                                        batchLoading
+                                            ? "opacity-70 cursor-not-allowed"
+                                            : "hover:bg-opacity-90"
+                                    }`}
+                                >
+                                    {batchLoading
+                                        ? "Running Model..."
+                                        : "Run Model to Predict"}
+                                </button>
+                                {batchLoading && (
+                                    <button
+                                        type="button"
+                                        onClick={cancelBatchPrediction}
+                                        className="px-5 py-2 rounded-md text-sm font-medium border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* ══ SINGLE mode ══ */}
@@ -852,7 +1118,7 @@ function ModelDeployment({ csvData }) {
                             )}
                             {filtered_column && filtered_column.length > 0 && (
                                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-4 mt-4">
-                                    <div className="rounded-xl border border-gray-200 bg-white p-4">
+                                    <div className="rounded-xl border border-gray-200 bg-white p-3">
                                         <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                             <h3 className="text-lg font-semibold tracking-normal text-gray-900">
                                                 Input Values
@@ -867,10 +1133,13 @@ function ModelDeployment({ csvData }) {
                                                     <input
                                                         type="checkbox"
                                                         className="h-4 w-4 accent-[#0D9488]"
-                                                        checked={useSourceSample}
+                                                        checked={
+                                                            useSourceSample
+                                                        }
                                                         onChange={(e) =>
                                                             handleSourceDatasetToggle(
-                                                                e.target.checked,
+                                                                e.target
+                                                                    .checked,
                                                             )
                                                         }
                                                     />
@@ -888,7 +1157,7 @@ function ModelDeployment({ csvData }) {
                                                 color="success"
                                                 clearable
                                                 fullWidth
-                                                size="md"
+                                                size="sm"
                                                 value={featureSearch}
                                                 onChange={(e) =>
                                                     setFeatureSearch(
@@ -896,6 +1165,18 @@ function ModelDeployment({ csvData }) {
                                                     )
                                                 }
                                                 placeholder="Search feature name..."
+                                                sx={{
+                                                    "& .MuiOutlinedInput-root":
+                                                        {
+                                                            minHeight: "34px",
+                                                            borderRadius:
+                                                                "10px",
+                                                        },
+                                                    "& .MuiInputBase-input": {
+                                                        fontSize: "0.85rem",
+                                                        padding: "7px 10px",
+                                                    },
+                                                }}
                                             />
                                         </div>
 
@@ -904,58 +1185,88 @@ function ModelDeployment({ csvData }) {
                                                 No features match your search.
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                            <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
                                                 {singleVisibleInputs.map(
-                                                    (val) => (
-                                                        <div
-                                                            key={val.__idx}
-                                                            className="rounded-md border border-gray-100 p-2"
-                                                        >
-                                                            <p className="mb-1 text-xs font-medium text-gray-700 truncate">
-                                                                {val.col}
-                                                            </p>
-                                                            <Input
-                                                                bordered
-                                                                color="success"
-                                                                value={String(
-                                                                    filtered_column[
-                                                                        val
-                                                                            .__idx
-                                                                    ]?.value ??
-                                                                        "",
-                                                                )}
-                                                                onChange={(e) =>
-                                                                    handleChangeValue(
-                                                                        val.__idx,
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                }
-                                                                fullWidth
-                                                                step={
-                                                                    filtered_column[
-                                                                        val
-                                                                            .__idx
-                                                                    ]
-                                                                        ?.data_type ===
-                                                                    "float"
-                                                                        ? 0.01
-                                                                        : 1
-                                                                }
-                                                                type={
-                                                                    filtered_column[
-                                                                        val
-                                                                            .__idx
-                                                                    ]
-                                                                        ?.data_type ===
-                                                                    "string"
-                                                                        ? "text"
-                                                                        : "number"
-                                                                }
-                                                                size="md"
-                                                            />
-                                                        </div>
-                                                    ),
+                                                    (val) => {
+                                                        const featureDataType =
+                                                            normalizeDataType(
+                                                                filtered_column[
+                                                                    val.__idx
+                                                                ]?.data_type,
+                                                            );
+                                                        const featureIsNumeric =
+                                                            shouldUseNumberInput(
+                                                                filtered_column[
+                                                                    val.__idx
+                                                                ],
+                                                            );
+                                                        const featureStep =
+                                                            featureIsNumeric
+                                                                ? isFloatType(
+                                                                      featureDataType,
+                                                                  )
+                                                                    ? 0.01
+                                                                    : 1
+                                                                : undefined;
+                                                        return (
+                                                            <div
+                                                                key={val.__idx}
+                                                                className="rounded-md border border-gray-100 p-1"
+                                                            >
+                                                                <p className="mb-1 text-sm font-medium text-gray-700 truncate">
+                                                                    {val.col}
+                                                                </p>
+                                                                <Input
+                                                                    bordered
+                                                                    color="success"
+                                                                    value={String(
+                                                                        filtered_column[
+                                                                            val
+                                                                                .__idx
+                                                                        ]
+                                                                            ?.value ??
+                                                                            "",
+                                                                    )}
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleChangeValue(
+                                                                            val.__idx,
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                    fullWidth
+                                                                    step={
+                                                                        featureStep
+                                                                    }
+                                                                    type={
+                                                                        featureIsNumeric
+                                                                            ? "number"
+                                                                            : "text"
+                                                                    }
+                                                                    size="sm"
+                                                                    sx={{
+                                                                        "& .MuiOutlinedInput-root":
+                                                                            {
+                                                                                minHeight:
+                                                                                    "34px",
+                                                                                borderRadius:
+                                                                                    "10px",
+                                                                            },
+                                                                        "& .MuiInputBase-input":
+                                                                            {
+                                                                                fontSize:
+                                                                                    "0.9rem",
+                                                                                padding:
+                                                                                    "7px 10px",
+                                                                            },
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    },
                                                 )}
                                             </div>
                                         )}
@@ -1030,32 +1341,35 @@ function ModelDeployment({ csvData }) {
                                         )}
                                     </div>
 
-                                    <div className="lg:sticky lg:top-4 h-fit w-full lg:min-w-[280px] lg:max-w-[520px] rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                                        <div className="bg-primary-btn px-4 py-2.5">
-                                            <h1 className="text-lg font-semibold tracking-normal text-white">
+                                    <div className="lg:sticky lg:top-4 h-fit w-full lg:min-w-[240px] lg:max-w-[420px] rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                                        <div className="bg-primary-btn px-4 py-2">
+                                            <h1 className="text-base font-semibold tracking-normal text-white">
                                                 Prediction
                                             </h1>
                                         </div>
 
-                                        <div className="p-4">
-                                            <p className="text-xs text-gray-600 mb-1.5">
+                                        <div className="p-3">
+                                            <p className="text-xs text-gray-600 mb-1">
                                                 {target_val}
                                             </p>
-                                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 min-h-[48px]">
+                                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 min-h-[42px]">
                                                 <span
                                                     className={`block max-w-full whitespace-pre-wrap break-all font-semibold text-gray-900 ${
-                                                        String(pred_result || "--")
-                                                            .length > 48
-                                                            ? "text-base leading-relaxed"
-                                                            : "text-2xl leading-tight"
+                                                        formatPredictionValue(
+                                                            pred_result,
+                                                        ).length > 48
+                                                            ? "text-sm leading-relaxed"
+                                                            : "text-xl leading-tight"
                                                     }`}
                                                 >
-                                                    {pred_result || "--"}
+                                                    {formatPredictionValue(
+                                                        pred_result,
+                                                    )}
                                                 </span>
                                             </div>
 
                                             <button
-                                                className={`w-full border-2 border-primary-btn bg-primary-btn text-white text-sm font-medium rounded-md py-2 mt-4 transition-colors ${
+                                                className={`w-full border-2 border-primary-btn bg-primary-btn text-white text-sm font-medium rounded-md py-1.5 mt-3 transition-colors ${
                                                     singleLoading
                                                         ? "opacity-80 cursor-not-allowed"
                                                         : "hover:bg-opacity-90"
@@ -1082,44 +1396,67 @@ function ModelDeployment({ csvData }) {
                     {/* ══ BATCH mode ══ */}
                     {predMode === "batch" && (
                         <div className="mt-6">
-                            <div className="mb-3">
-                                <p className="mb-1 text-sm font-medium text-gray-700">
-                                    Upload Dataset (CSV)
+                            {batchPreviewRows.length > 0 && (
+                                <p className="mb-3 text-sm text-gray-600 text-center">
+                                    {batchPreviewRows.length} row(s) loaded
                                 </p>
-                                <label className="flex items-center gap-3 cursor-pointer w-fit">
-                                    <span
-                                        className={`px-5 py-2 rounded-md text-sm font-medium border-2 border-primary-btn bg-primary-btn text-white hover:bg-opacity-90 transition-colors ${
-                                            batchLoading
-                                                ? "opacity-50 cursor-not-allowed"
-                                                : ""
-                                        }`}
-                                    >
-                                        {batchLoading
-                                            ? "Working..."
-                                            : "Choose CSV File"}
-                                    </span>
-                                    <input
-                                        ref={batchFileRef}
-                                        type="file"
-                                        accept=".csv"
-                                        className="hidden"
-                                        disabled={batchLoading}
-                                        onChange={handleBatchFile}
-                                    />
-                                    {batchPreviewRows.length > 0 && (
-                                        <span className="text-sm text-gray-600">
-                                            {batchPreviewRows.length} row(s)
-                                            loaded
-                                        </span>
-                                    )}
-                                </label>
-                            </div>
-                            <h3 className="mb-2 text-lg font-semibold tracking-normal text-gray-900">
-                                Batch Prediction
-                            </h3>
+                            )}
 
-                            {(batchPreviewRows.length > 0 || batchResult) && (
+                            {batchLoading && (
+                                <div className="mb-4 rounded-lg border border-[#BFE7E2] bg-[#F0FBFA] px-4 py-3">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <p className="text-sm font-medium text-[#4E7F78]">
+                                            Processing prediction...
+                                        </p>
+                                        <span className="text-xs font-semibold text-[#5F8F88]">
+                                            {batchStatus === "PROGRESS"
+                                                ? `${Math.round(batchProgress.percent)}%`
+                                                : batchStatus === "PENDING"
+                                                  ? "Queued"
+                                                  : "Running"}
+                                        </span>
+                                    </div>
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={
+                                            batchStatus === "PROGRESS" ||
+                                            batchStatus === "SUCCESS"
+                                                ? Math.max(
+                                                      0,
+                                                      Math.min(
+                                                          100,
+                                                          Number(
+                                                              batchProgress.percent || 0,
+                                                          ),
+                                                      ),
+                                                  )
+                                                : 0
+                                        }
+                                        sx={{
+                                            height: 8,
+                                            borderRadius: 8,
+                                            backgroundColor: "#D9F1EE",
+                                            "& .MuiLinearProgress-bar": {
+                                                backgroundColor: "#0D9488",
+                                            },
+                                        }}
+                                    />
+                                    <p className="mt-2 text-xs text-[#6A9790]">
+                                        {batchStatus === "PROGRESS" &&
+                                        batchProgress.total > 0
+                                            ? `${batchProgress.processed} of ${batchProgress.total} rows processed`
+                                            : batchStatus === "PENDING"
+                                              ? "Preparing batch task..."
+                                              : "Starting..."}
+                                    </p>
+                                </div>
+                            )}
+
+                            {batchResult && (
                                 <div className="mt-3 space-y-3">
+                                    <h3 className="mb-2 text-lg font-semibold tracking-normal text-gray-900 text-center">
+                                        Predicted Result
+                                    </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-3 items-start">
                                         <div className="flex flex-wrap items-center gap-3">
                                             {batchResult && (
@@ -1157,28 +1494,18 @@ function ModelDeployment({ csvData }) {
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={runBatchPrediction}
-                                                disabled={batchLoading}
-                                                className={`px-5 py-2 rounded-md text-sm font-medium border-2 border-primary-btn bg-primary-btn text-white transition-colors ${
-                                                    batchLoading
-                                                        ? "opacity-70 cursor-not-allowed"
-                                                        : "hover:bg-opacity-90"
-                                                }`}
-                                            >
-                                                {batchLoading
-                                                    ? "Running Batch..."
-                                                    : "Run Batch Prediction"}
-                                            </button>
-                                            {batchLoading && (
+                                        <div className="flex md:justify-end">
+                                            {batchResult?.predicted_count > 0 && (
                                                 <button
-                                                    type="button"
-                                                    onClick={cancelBatchPrediction}
-                                                    className="px-5 py-2 rounded-md text-sm font-medium border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
+                                                    onClick={() =>
+                                                        downloadBatchCSV(
+                                                            batchResult.predictions,
+                                                            `predictions_${target_val}.csv`,
+                                                        )
+                                                    }
+                                                    className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-[#0D9488] text-white rounded-md hover:bg-[#0F766E] transition-colors"
                                                 >
-                                                    Cancel
+                                                    ↓ Download Predictions CSV
                                                 </button>
                                             )}
                                         </div>
@@ -1186,23 +1513,7 @@ function ModelDeployment({ csvData }) {
 
                                     {batchResult?.predicted_count > 0 && (
                                         <div className="space-y-2">
-                                            <button
-                                                onClick={() =>
-                                                    downloadBatchCSV(
-                                                        batchResult.predictions,
-                                                        `predictions_${target_val}.csv`,
-                                                    )
-                                                }
-                                                className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-[#0D9488] text-white rounded-md hover:bg-[#0F766E] transition-colors"
-                                            >
-                                                ↓ Download Predictions CSV
-                                            </button>
-
                                             <div>
-                                                <h4 className="font-semibold text-gray-800 mb-2">
-                                                    Prediction Results (
-                                                    {batchResult.predicted_count})
-                                                </h4>
                                                 <div className="rounded-lg border border-gray-200 p-2">
                                                     <AgGridComponent
                                                         rowData={
@@ -1216,7 +1527,9 @@ function ModelDeployment({ csvData }) {
                                                         paginationThreshold={25}
                                                         autoPageSize={false}
                                                         adaptiveHeight={true}
-                                                        capAdaptiveHeight={false}
+                                                        capAdaptiveHeight={
+                                                            false
+                                                        }
                                                         minHeight={260}
                                                         height={560}
                                                     />
@@ -1257,7 +1570,9 @@ function ModelDeployment({ csvData }) {
                                             <div className="rounded-lg border border-red-200 p-2">
                                                 <AgGridComponent
                                                     rowData={skippedRows}
-                                                    columnDefs={skippedColumnDefs}
+                                                    columnDefs={
+                                                        skippedColumnDefs
+                                                    }
                                                     enablePagination={true}
                                                     paginationPageSize={10}
                                                     paginationThreshold={10}

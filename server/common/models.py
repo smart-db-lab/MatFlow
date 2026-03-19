@@ -1,89 +1,8 @@
-# from django.db import models
-
-
-# class Citation(models.Model):
-#     """Represents a bibliographic source (APA/MLA style)."""
-
-#     class SourceType(models.TextChoices):
-#         BOOK = "book", "Book"
-#         JOURNAL = "journal", "Journal Article"
-#         WEBSITE = "website", "Website"
-#         REPORT = "report", "Report"
-#         THESIS = "thesis", "Thesis / Dissertation"
-#         OTHER = "other", "Other"
-
-#     # Basic information
-#     type_of_source = models.CharField(
-#         max_length=20,
-#         choices=SourceType.choices,
-#         default=SourceType.BOOK,
-#     )
-
-#     # Authors
-#     author = models.CharField(
-#         max_length=255,
-#         blank=True,
-#         help_text="Name of individual author(s), e.g., 'Smith, J. D.'",
-#     )
-#     corporate_author = models.CharField(
-#         max_length=255,
-#         blank=True,
-#         help_text="If corporate author, e.g., 'World Health Organization'",
-#     )
-
-#     # Bibliographic details
-#     title = models.CharField(max_length=300)
-#     year = models.CharField(max_length=10, blank=True)
-#     publisher = models.CharField(max_length=200, blank=True)
-#     city = models.CharField(max_length=100, blank=True)
-
-#     # Journal/Article specific fields
-#     journal_name = models.CharField(max_length=200, blank=True)
-#     volume = models.CharField(max_length=20, blank=True)
-#     issue = models.CharField(max_length=20, blank=True)
-#     pages = models.CharField(max_length=50, blank=True)
-
-#     # Online sources
-#     url = models.URLField(blank=True)
-#     access_date = models.DateField(blank=True, null=True)
-
-#     # Metadata
-#     tag_name = models.CharField(
-#         max_length=100,
-#         blank=True,
-#         help_text="Optional short tag for reference management.",
-#     )
-#     created_at = models.DateTimeField(auto_now_add=True)
-
-#     class Meta:
-#         ordering = ["-created_at"]
-#         verbose_name = "Citation"
-#         verbose_name_plural = "Citations"
-
-#     def __str__(self):
-#         """Readable display of the citation."""
-#         author_display = (
-#             self.corporate_author or self.author or "Unknown Author"
-#         )
-#         year_display = f" ({self.year})" if self.year else ""
-#         return f"{author_display}{year_display}: {self.title}"
-
-#     def formatted_apa(self):
-#         """Return a human-readable APA-style string."""
-#         author_part = self.corporate_author or self.author or ""
-#         year_part = f"({self.year})." if self.year else ""
-#         title_part = f"{self.title}."
-#         publisher_part = f" {self.publisher}." if self.publisher else ""
-#         url_part = f" Retrieved from {self.url}" if self.url else ""
-#         return f"{author_part} {year_part} {title_part}{publisher_part}{url_part}".strip()
-
-
-
-
 from django.db import models
 from django.core.validators import RegexValidator
 from django.utils import timezone
-from core.models import SoftDeleteModel
+from core.SoftDeleteModel import SoftDeleteModel
+from core.BaseModel import BaseModel
 
 date_validator = RegexValidator(
     regex=r'^(\d{4}|\d{4}-\d{2}|\d{4}-\d{2}-\d{2})$',
@@ -94,7 +13,7 @@ def date_help():
     return "Format: YYYY or YYYY-MM or YYYY-MM-DD"
 
 
-class Journal(SoftDeleteModel):
+class Journal(SoftDeleteModel , BaseModel ):
     title = models.CharField(max_length=255)
     authors = models.CharField(max_length=500, blank=True, null=True)
     publication_date = models.CharField(
@@ -122,7 +41,7 @@ class Journal(SoftDeleteModel):
         return self.title
 
 
-class Conference(SoftDeleteModel):
+class Conference(SoftDeleteModel , BaseModel):
     title = models.CharField(max_length=255)
     authors = models.CharField(max_length=500, blank=True, null=True)
     publication_date = models.CharField(
@@ -149,7 +68,7 @@ class Conference(SoftDeleteModel):
         return self.title
 
 
-class Book(SoftDeleteModel):
+class Book(SoftDeleteModel , BaseModel):
     title = models.CharField(max_length=255)
     authors = models.CharField(max_length=500)
     publication_date = models.CharField(
@@ -174,7 +93,7 @@ class Book(SoftDeleteModel):
         return self.title
 
 
-class Patent(SoftDeleteModel):
+class Patent(SoftDeleteModel , BaseModel):
     title = models.CharField(max_length=255)
     inventors = models.CharField(max_length=500, blank=True, null=True)
     publication_date = models.CharField(
@@ -199,7 +118,7 @@ class Patent(SoftDeleteModel):
         return self.title
 
 
-class Dataset(SoftDeleteModel):
+class Dataset(SoftDeleteModel , BaseModel):
     title = models.CharField(max_length=255)
     originators = models.CharField(max_length=500, blank=True, null=True)
     publication_date = models.CharField(
@@ -224,7 +143,7 @@ class Dataset(SoftDeleteModel):
 
 
 
-class OurServiece(SoftDeleteModel):
+class OurServiece(SoftDeleteModel , BaseModel):
     service_key = models.CharField(
         max_length=50,
         default="mlflow",
@@ -238,7 +157,7 @@ class OurServiece(SoftDeleteModel):
     def __str__(self):
         return self.service_name
     
-class HeaderSection(SoftDeleteModel):
+class HeaderSection(SoftDeleteModel , BaseModel):
     service_key = models.CharField(
         max_length=50,
         default="mlflow",
@@ -253,7 +172,7 @@ class HeaderSection(SoftDeleteModel):
     def __str__(self):
         return self.title
     
-class SupportLogo(SoftDeleteModel):
+class SupportLogo(SoftDeleteModel , BaseModel):
     service_key = models.CharField(
         max_length=50,
         default="mlflow",
@@ -269,7 +188,7 @@ class SupportLogo(SoftDeleteModel):
     def __str__(self):
         return str(self.support_logo) if self.support_logo else "Support Logo"
     
-class HeroImage(SoftDeleteModel):
+class HeroImage(SoftDeleteModel , BaseModel):
     service_key = models.CharField(
         max_length=50,
         default="mlflow",
@@ -282,7 +201,7 @@ class HeroImage(SoftDeleteModel):
         return str(self.hero_image) if self.hero_image else "Hero Image"
 
 
-class SiteVisit(models.Model):
+class SiteVisit(SoftDeleteModel , BaseModel):
     """Tracks unique site visits for the visitor counter."""
     visitor_id = models.CharField(
         max_length=64,
@@ -302,7 +221,7 @@ class SiteVisit(models.Model):
         return f"{self.visitor_type} - {self.visitor_id[:8]}... @ {self.visited_at}"
 
 
-class FAQ(SoftDeleteModel):
+class FAQ(SoftDeleteModel ,BaseModel):
     service_key = models.CharField(
         max_length=50,
         default="mlflow",

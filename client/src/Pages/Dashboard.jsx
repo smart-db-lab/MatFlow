@@ -12,7 +12,7 @@ import {
     setActiveFile,
     setActiveFolderAction,
 } from "../Slices/UploadedFileSlice";
-import { setActiveWorkspace } from "../Slices/workspaceSlice";
+import { clearWorkspaceContext } from "../Slices/workspaceSlice";
 import { commonApi } from "../services/api/apiService";
 import { isGuestMode } from "../util/guestSession";
 import { sessionGetString } from "../util/sessionProjectStorage";
@@ -84,9 +84,13 @@ export default function Dashboard() {
             dispatch(setActiveFunction(""));
             dispatch(setActiveFile(""));
             dispatch(setActiveFolderAction(""));
+            dispatch(clearWorkspaceContext());
             setProjectName("");
             return;
         }
+
+        // Project changed: clear workspace context first.
+        dispatch(clearWorkspaceContext());
 
         const storedActiveFileId = sessionGetString("activeFileId", projectId);
         const storedActiveFolder = sessionGetString("activeFolder", projectId);
@@ -134,17 +138,6 @@ export default function Dashboard() {
             try {
                 const project = await commonApi.projects.get(projectId);
                 setProjectName(project?.name || "");
-
-                // Extract workspace ID from project and store in Redux globally
-                if (project?.workspaces && project.workspaces.length > 0) {
-                    const firstWorkspace = project.workspaces[0];
-                    dispatch(
-                        setActiveWorkspace({
-                            workspaceId: firstWorkspace.id,
-                            filename: null,
-                        }),
-                    );
-                }
             } catch (_) {
                 setProjectName("");
             }

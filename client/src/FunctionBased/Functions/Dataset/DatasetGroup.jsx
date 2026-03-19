@@ -14,6 +14,10 @@ function DatasetGroup({ csvData }) {
 
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [columnNames, setColumnNames] = useState([]);
+  const datasetName = useMemo(() => {
+    const rawName = String(activeCsvFile?.name || "").split("/").pop();
+    return rawName || "Selected Dataset";
+  }, [activeCsvFile]);
 
   const columnDefs = useMemo(() => {
     if (!rowData) return;
@@ -86,12 +90,11 @@ function DatasetGroup({ csvData }) {
 
   return (
     <div>
-      <div className="mb-3">
+      <div className="mb-2">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Group Analysis</h2>
-            <p className="mt-0.5 text-xs text-gray-500">Group columns and apply aggregation</p>
-          </div>
+          <h2 className="text-base font-semibold text-gray-900">
+            Group Analysis - {datasetName}
+          </h2>
           <button
             type="button"
             onClick={() => setShowControls((prev) => !prev)}

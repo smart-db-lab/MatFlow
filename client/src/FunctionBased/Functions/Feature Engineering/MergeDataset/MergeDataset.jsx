@@ -60,7 +60,7 @@ function MergeDataset({ csvData }) {
                 setFileNames(files);
             } catch (err) {
                 console.error(err);
-                toast.error(err.message);
+                toast.error("Failed to load files.");
                 // setError(err.message);
             }
         };
@@ -114,17 +114,7 @@ function MergeDataset({ csvData }) {
                 ),
             });
 
-            toast.success(
-                `New dataset "${fileName}" saved! Find it in the sidebar under the generated_datasets folder to build a model.`,
-                {
-                    autoClose: 5000,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                    progress: undefined,
-                },
-            );
+            toast.success("File saved successfully.");
             dispatch(setReRender(!render));
 
             setAnotherCsvData();
@@ -132,14 +122,7 @@ function MergeDataset({ csvData }) {
             setRightDataframeValue();
             setSecondDatasetName("");
         } catch (error) {
-            toast.error(error.message, {
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            toast.error("Operation failed.");
         }
     };
 

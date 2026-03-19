@@ -4,7 +4,12 @@
  */
 
 import { apiFetch } from "../../util/apiClient";
-import { API_BASE_URL, parseResponse, extractData } from "./apiHelpers";
+import {
+    API_BASE_URL,
+    parseResponse,
+    extractData,
+    createApiError,
+} from "./apiHelpers";
 
 // Normalize API root so that it works whether API_BASE_URL includes `/api` or not.
 // - If API_BASE_URL ends with `/api`, we use it as-is.
@@ -52,6 +57,34 @@ export function withWorkspaceContext(params = {}, wsCtx) {
     };
 }
 
+function normalizeReadRequestArgs(args) {
+    //  readFile({ projectId, workspaceId, folder, filename, ... })
+    if (args.length === 1 && typeof args[0] === "object" && args[0] !== null) {
+        const payload = args[0];
+        return {
+            projectId: payload.projectId,
+            workspaceId: payload.workspaceId,
+            foldername: payload.folder || payload.foldername || "",
+            filename: payload.filename,
+            page: payload.page,
+            pageSize: payload.pageSize,
+            metaOnly: payload.metaOnly,
+        };
+    }
+
+    // readFile(projectId, foldername, filename)
+    // readFilePaginated(projectId, foldername, filename, page, pageSize, metaOnly)
+    return {
+        projectId: args[0],
+        workspaceId: undefined,
+        foldername: args[1] || "",
+        filename: args[2],
+        page: args[3],
+        pageSize: args[4],
+        metaOnly: args[5],
+    };
+}
+
 /**
  * Convenience selector result shape – use together with
  * ``selectWorkspaceContext`` from workspaceSlice.
@@ -79,13 +112,20 @@ export const matflowApi = {
         },
 
         // Read a specific file
-        readFile: async (projectId, foldername = "", filename) => {
+        readFile: async (...args) => {
+            const {
+                projectId,
+                workspaceId,
+                foldername = "",
+                filename,
+            } = normalizeReadRequestArgs(args);
             const path =
                 (import.meta.env.VITE_APP_API_DATASET_READ_FILE || "read_file/")
                     .replace(/^\/*api\/+/, "")
                     .replace(/^\//, "") || "read_file/";
             const params = new URLSearchParams();
             if (projectId) params.append("project_id", projectId);
+            if (workspaceId) params.append("workspace_id", workspaceId);
             if (foldername) params.append("folder", foldername);
             if (filename) params.append("file", filename);
             const response = await apiFetch(
@@ -96,17 +136,20 @@ export const matflowApi = {
 
         // Paginated read — returns { data, total_rows, columns, page, page_size }
         // Metadata-only mode — returns { total_rows, columns, dtypes, page, page_size }
-        readFilePaginated: async (
-            projectId,
-            foldername = "",
-            filename,
-            page = 1,
-            pageSize = 200,
-            metaOnly = false,
-        ) => {
+        readFilePaginated: async (...args) => {
+            const {
+                projectId,
+                workspaceId,
+                foldername = "",
+                filename,
+                page = 1,
+                pageSize = 200,
+                metaOnly = false,
+            } = normalizeReadRequestArgs(args);
             const path = "read_file/";
             const params = new URLSearchParams();
             if (projectId) params.append("project_id", projectId);
+            if (workspaceId) params.append("workspace_id", workspaceId);
             if (foldername) params.append("folder", foldername);
             if (filename) params.append("file", filename);
             if (metaOnly) {
@@ -121,8 +164,24 @@ export const matflowApi = {
             return await parseResponse(response);
         },
 
+        listWorkspaceFiles: async ({ projectId, workspaceId }) => {
+            const params = new URLSearchParams();
+            if (projectId) params.append("project_id", projectId);
+            if (workspaceId) params.append("workspace_id", workspaceId);
+            const response = await apiFetch(
+                `${MATFLOW_API_ROOT}/workspace-files/?${params.toString()}`,
+            );
+            return await parseResponse(response);
+        },
+
         // Create a new file
-        createFile: async (projectId, data, filename, foldername = "") => {
+        createFile: async (
+            projectId,
+            data,
+            filename,
+            foldername = "",
+            workspaceId = undefined,
+        ) => {
             const path =
                 (
                     import.meta.env.VITE_APP_API_DATASET_CREATE_FILE ||
@@ -134,6 +193,7 @@ export const matflowApi = {
                 method: "POST",
                 body: JSON.stringify({
                     project_id: projectId,
+                    workspace_id: workspaceId,
                     data,
                     filename: filename.endsWith(".csv")
                         ? filename
@@ -279,6 +339,20 @@ export const matflowApi = {
             return response; // Return response for blob handling
         },
 
+        // Workspace-aware file fetch (downloads/previews from project tree)
+        fetchProjectFile: async (projectId, folder, file) => {
+            const endpoint =
+                import.meta.env.VITE_APP_API_FETCH_FILE || "/api/fetch-file/";
+            const params = new URLSearchParams();
+            if (projectId) params.append("project_id", projectId);
+            if (folder) params.append("folder", folder);
+            if (file) params.append("file", file);
+            const response = await apiFetch(
+                `${API_BASE_URL}${endpoint}?${params.toString()}`,
+            );
+            return response;
+        },
+
         // Delete file or folder
         delete: async (projectId, folder, file = null) => {
             const endpoint =
@@ -348,7 +422,15 @@ export const matflowApi = {
                     parentFolder,
                 }),
             });
-            return await parseResponse(response);
+            const data = await parseResponse(response);
+            if (!response.ok) {
+                const err = new Error(
+                    data?.error || data?.detail || "Failed to rename item",
+                );
+                err.data = data;
+                throw err;
+            }
+            return data;
         },
         move: async (projectId, sourcePath, destinationFolder) => {
             const endpoint = import.meta.env.VITE_APP_API_MOVE || "/api/move/";
@@ -701,7 +783,15 @@ export const matflowApi = {
                     body: JSON.stringify(data),
                 },
             );
-            return await parseResponse(response);
+            const result = await parseResponse(response);
+            if (!response.ok || result?.error) {
+                throw createApiError(
+                    response,
+                    result,
+                    "Failed to build model.",
+                );
+            }
+            return result;
         },
 
         // Model evaluation
@@ -740,6 +830,47 @@ export const matflowApi = {
             return await parseResponse(response);
         },
 
+        // Server model registry (project-scoped)
+        listModelsRegistry: async (projectId) => {
+            const response = await apiFetch(
+                `${API_BASE_URL}/api/models_registry/?project_id=${encodeURIComponent(projectId || "")}`,
+            );
+            return await parseResponse(response);
+        },
+
+        // Server split registry (project/workspace-scoped)
+        listSplitsRegistry: async (
+            projectId,
+            workspaceId,
+            activeOnly = true,
+        ) => {
+            const params = new URLSearchParams();
+            if (projectId) params.append("project_id", projectId);
+            if (workspaceId) params.append("workspace_id", workspaceId);
+            params.append("active_only", activeOnly ? "1" : "0");
+            const response = await apiFetch(
+                `${API_BASE_URL}/api/splits_registry/?${params.toString()}`,
+            );
+            return await parseResponse(response);
+        },
+
+        deleteModelRegistry: async (modelId, projectId) => {
+            const response = await apiFetch(
+                `${API_BASE_URL}/api/models_registry/${modelId}/delete/`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ project_id: projectId }),
+                },
+            );
+            return await parseResponse(response);
+        },
+
+        downloadModelRegistry: async (modelId, projectId) => {
+            return await apiFetch(
+                `${API_BASE_URL}/api/models_registry/${modelId}/download/?project_id=${encodeURIComponent(projectId || "")}`,
+            );
+        },
+
         // Hyperparameter optimization
         hyperparameterOptimization: async (data) => {
             const response = await apiFetch(
@@ -749,7 +880,15 @@ export const matflowApi = {
                     body: JSON.stringify(data),
                 },
             );
-            return await parseResponse(response);
+            const result = await parseResponse(response);
+            if (!response.ok || result?.error) {
+                throw createApiError(
+                    response,
+                    result,
+                    "Failed to run hyperparameter optimization.",
+                );
+            }
+            return result;
         },
     },
 

@@ -8,7 +8,7 @@ function HeroSection({
   currentHeroIndex,
   setCurrentHeroIndex,
 }) {
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
 
   const carouselContent = () => {
     if (loadingHeroImages) {

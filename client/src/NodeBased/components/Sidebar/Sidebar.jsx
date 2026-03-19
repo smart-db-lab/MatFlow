@@ -126,12 +126,12 @@ const Sidebar = ({ onValueChange }) => {
             </Collapse>
           </Collapse.Group>
 
-          {/* Materials Descriptor Generation Nodes */}
+          {/* Manage Material Properties Nodes */}
           <Collapse.Group bordered>
             <Collapse
               title={
                 <h1 className="font-medium tracking-wider">
-                  Materials Descriptor Generation
+                  Manage Material Properties
                 </h1>
               }
             >

@@ -73,7 +73,7 @@ function LayoutSelector({ echartsData, projectId: projectIdProp = null }) {
     );
     const activeFile = useSelector((state) => state.uploadedFile.activeFile);
     const [columns, setColumns] = useState(1);
-    const [title, setTitle] = useState("");
+    const [titlesByIndex, setTitlesByIndex] = useState({});
     const chartRefs = useRef([]);
 
     // Handler for columns input change
@@ -84,9 +84,12 @@ function LayoutSelector({ echartsData, projectId: projectIdProp = null }) {
         }
     };
 
-    // Handler for title input
-    const handleTitleChange = (e) => {
-        setTitle(e.target.value);
+    // Handler for per-chart title input
+    const handleTitleChange = (index, value) => {
+        setTitlesByIndex((prev) => ({
+            ...prev,
+            [index]: value,
+        }));
     };
 
     // Force ECharts to measure the real container width after mount
@@ -100,14 +103,62 @@ function LayoutSelector({ echartsData, projectId: projectIdProp = null }) {
                 chartRefs.current[index]?.getEchartsInstance?.();
             if (!echartsInstance) return;
 
-            const url = echartsInstance.getDataURL({
-                type: fmt === "svg" ? "svg" : "png",
-                pixelRatio: 2,
-                backgroundColor: "#ffffff",
-            });
+            const getExportUrl = async () => {
+                if (fmt !== "svg") {
+                    return echartsInstance.getDataURL({
+                        type: "png",
+                        pixelRatio: 2,
+                        backgroundColor: "#ffffff",
+                    });
+                }
+
+                try {
+                    // Canvas renderer can produce invalid .svg payloads.
+                    // Build a temporary SVG-rendered chart for true SVG export.
+                    const echartsModule = await import("echarts");
+                    const tempEl = document.createElement("div");
+                    tempEl.style.position = "fixed";
+                    tempEl.style.left = "-10000px";
+                    tempEl.style.top = "-10000px";
+                    tempEl.style.width = `${echartsInstance.getWidth()}px`;
+                    tempEl.style.height = `${echartsInstance.getHeight()}px`;
+                    document.body.appendChild(tempEl);
+
+                    let tempChart;
+                    try {
+                        tempChart = echartsModule.init(tempEl, null, {
+                            renderer: "svg",
+                        });
+                        tempChart.setOption(echartsInstance.getOption(), {
+                            notMerge: true,
+                            lazyUpdate: false,
+                        });
+
+                        return tempChart.getDataURL({
+                            type: "svg",
+                            pixelRatio: 2,
+                            backgroundColor: "#ffffff",
+                        });
+                    } finally {
+                        tempChart?.dispose?.();
+                        tempEl.remove();
+                    }
+                } catch (err) {
+                    console.warn(
+                        "SVG renderer export failed; using default export path.",
+                        err,
+                    );
+                    return echartsInstance.getDataURL({
+                        type: "svg",
+                        pixelRatio: 2,
+                        backgroundColor: "#ffffff",
+                    });
+                }
+            };
+            const url = await getExportUrl();
 
             const chartTitle =
-                title ||
+                titlesByIndex[index] ||
                 echartsInstance.getOption()?.title?.[0]?.text ||
                 `chart-${index + 1}`;
             const safeName = chartTitle
@@ -166,7 +217,6 @@ function LayoutSelector({ echartsData, projectId: projectIdProp = null }) {
                 return;
             }
 
-            let persistedInProject = false;
             if (activeProjectId) {
                 try {
                     const workspaceRoot =
@@ -188,60 +238,26 @@ function LayoutSelector({ echartsData, projectId: projectIdProp = null }) {
                         }),
                     );
                     await matflowApi.dataset.uploadFile(formData);
-                    persistedInProject = true;
                 } catch (error) {
                     console.warn(
                         "Failed to persist chart in project output folder:",
                         error,
                     );
-                    toast.warning(
-                        "Local download completed, but saving to workspace output failed.",
-                    );
+                    toast.warning("Failed to save chart in project.");
                 }
             }
 
             if (localStatus === "saved") {
-                toast.success(
-                    persistedInProject
-                        ? `Chart saved locally and in workspace output as "${fileName}".`
-                        : `Chart saved locally as "${fileName}".`,
-                );
+                toast.success("Chart saved successfully.");
             } else {
-                toast.success(
-                    persistedInProject
-                        ? `Download started. Chart also saved to workspace output as "${fileName}".`
-                        : `Download started for "${fileName}".`,
-                );
+                toast.success("Download started.");
             }
         },
-        [title, activeProjectId, activeFolder, activeFile],
+        [titlesByIndex, activeProjectId, activeFolder, activeFile],
     );
 
     return (
         <div className="mt-2">
-            {/* Title Input */}
-            <div className="mb-2 flex justify-center">
-                <div className="w-full max-w-md mx-auto flex items-center gap-3">
-                    <span className="text-sm font-semibold text-slate-500 whitespace-nowrap">
-                        Input Title
-                    </span>
-                    <Input
-                        clearable
-                        bordered
-                        color="success"
-                        size="sm"
-                        placeholder="Enter your desired title"
-                        value={title}
-                        onChange={handleTitleChange}
-                        css={{
-                            minWidth: "220px",
-                            display: "flex",
-                            alignItems: "center",
-                        }}
-                    />
-                </div>
-            </div>
-
             {/* Grid Layout for Plots */}
             <div
                 className="mt-8 grid w-full gap-6 px-2"
@@ -266,7 +282,10 @@ function LayoutSelector({ echartsData, projectId: projectIdProp = null }) {
                                 ...option,
                                 title: {
                                     ...(option.title || {}),
-                                    text: title || option?.title?.text || "",
+                                    text:
+                                        titlesByIndex[index] ||
+                                        option?.title?.text ||
+                                        "",
                                 },
                             };
 
@@ -281,6 +300,32 @@ function LayoutSelector({ echartsData, projectId: projectIdProp = null }) {
 
                             return (
                                 <div className="relative group h-full flex flex-col">
+                                    <div className="mb-2 flex items-center justify-center">
+                                        <div className="w-full max-w-md mx-auto flex items-center gap-3">
+                                            <span className="text-sm font-semibold text-slate-500 whitespace-nowrap">
+                                                Input Title
+                                            </span>
+                                            <Input
+                                                clearable
+                                                bordered
+                                                color="success"
+                                                size="sm"
+                                                placeholder="Enter your desired title"
+                                                value={titlesByIndex[index] || ""}
+                                                onChange={(e) =>
+                                                    handleTitleChange(
+                                                        index,
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                css={{
+                                                    minWidth: "220px",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
                                     {/* Download buttons — appear on hover */}
                                     <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                         <button

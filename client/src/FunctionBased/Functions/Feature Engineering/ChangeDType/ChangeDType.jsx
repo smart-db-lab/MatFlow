@@ -155,13 +155,7 @@ function ChangeDType({ csvData }) {
 
             if (Data?.error) {
                 const detail = Data.details?.join("; ") || Data.error;
-                toast.error(`Conversion failed: ${detail}`, {
-                    autoClose: 7000,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                });
+                toast.error(`Conversion failed: ${detail}`);
                 return;
             }
 
@@ -182,24 +176,10 @@ function ChangeDType({ csvData }) {
                 foldername: activeFolder,
             });
 
-            toast.success(`Data updated successfully!`, {
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            toast.success("File saved successfully.");
             dispatch(setReRender(!render));
         } catch (error) {
-            toast.error("Something went wrong. Please try again", {
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            toast.error("Operation failed.");
         }
     };
 

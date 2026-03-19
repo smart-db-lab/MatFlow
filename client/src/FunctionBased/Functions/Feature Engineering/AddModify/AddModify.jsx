@@ -115,28 +115,11 @@ function AddModify({ csvData }) {
                 });
             }
 
-            const successMsg = featureData.save_as_new
-                ? `New dataset "${fileName}" saved! Find it in the sidebar under the generated_datasets folder to build a model.`
-                : `Data ${currentOption === "Add" ? "added" : "modified"} successfully!`;
-            toast.success(successMsg, {
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            toast.success("File saved successfully.");
             dispatch(setReRender(!render));
         } catch (error) {
             console.log(error);
-            toast.error("Something went wrong. Please try again", {
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            toast.error("Operation failed.");
         }
     };
 

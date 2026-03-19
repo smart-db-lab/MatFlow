@@ -909,7 +909,7 @@ export const handleSplitDataset = async (rflow, params) => {
     let { splitDataset } = rflow.getNode(params.source).data;
 
     if (!splitDataset) throw new Error("Check Split Dataset Node.");
-    let url = "http://127.0.0.1:8000/api/split_dataset/";
+    let url = "http://127.0.0.1:9000/api/split_dataset/";
 
     // Provide default values for missing parameters
     const requestBody = {

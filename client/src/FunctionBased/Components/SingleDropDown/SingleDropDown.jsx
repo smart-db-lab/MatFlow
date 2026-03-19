@@ -73,9 +73,9 @@ function SingleDropDown({
             {...params}
             sx={{
               '& .MuiOutlinedInput-root': {
-                padding: '8px 8px',
+                padding: '0 8px',
                 borderRadius: '12px',
-                minHeight: '42px',
+                minHeight: '35px',
                 backgroundColor: '#ffffff',
                 '& fieldset': {
                   borderColor: '#d1d5db',

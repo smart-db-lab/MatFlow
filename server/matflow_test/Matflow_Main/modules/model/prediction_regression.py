@@ -12,6 +12,7 @@ from eda.graph.plotly_theme import apply_modern_theme, MODERN_COLORS
 
 def prediction_regression(file):
     target_var = file.get("Target Variable")
+    model_opt = file.get("regressor")
     
     # Get the dataset - now seamlessly injected by _inject_workspace from workspace_id and filename
     data_dict = file.get("file", [])
@@ -32,9 +33,9 @@ def prediction_regression(file):
             pass
     
     result_opt = file.get("Result")
-    return show_result(y, y_pred, result_opt, X=X)
+    return show_result(y, y_pred, result_opt, X=X, model_opt=model_opt)
 
-def show_result(y, y_pred, result_opt, X=None):
+def show_result(y, y_pred, result_opt, X=None, model_opt=None):
     # Ensure arrays are numpy arrays and flatten them
     y = np.asarray(y).flatten()
     y_pred = np.asarray(y_pred).flatten()
@@ -226,7 +227,7 @@ def show_result(y, y_pred, result_opt, X=None):
         option = {
             "backgroundColor": "#ffffff",
             "title": {
-                "text": "Residuals vs. Predicted",
+                "text": "Residuals vs. Predicted Values",
                 "left": "center",
                 "top": 12,
                 "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
@@ -583,5 +584,11 @@ def show_result(y, y_pred, result_opt, X=None):
             number={'font': {'color': MODERN_COLORS[3], 'size': 36}, 'valueformat': '.4f'},
         ), row=2, col=2)
 
-        apply_modern_theme(fig, title='Regression Metrics Summary')
+        clean_model_name = str(model_opt or "").strip()
+        metrics_title = (
+            f"{clean_model_name} Model Performance Metrics"
+            if clean_model_name
+            else "Regression Model Performance Metrics"
+        )
+        apply_modern_theme(fig, title=metrics_title)
         return JsonResponse({'graph': pio.to_json(fig)})

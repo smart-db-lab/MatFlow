@@ -2,7 +2,28 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 function ServicesSection({ services, loadingServices }) {
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:9000";
+  const appBasePath =
+    (import.meta.env.VITE_APP_BASE_PATH || "/").replace(/\/+$/, "") || "/";
+
+  const normalizeInternalPath = (path = "/") => {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+    if (appBasePath === "/") {
+      return normalizedPath;
+    }
+
+    if (normalizedPath === appBasePath) {
+      return "/";
+    }
+
+    if (normalizedPath.startsWith(`${appBasePath}/`)) {
+      const stripped = normalizedPath.slice(appBasePath.length);
+      return stripped || "/";
+    }
+
+    return normalizedPath;
+  };
 
   const isInternalUrl = (url) => {
     if (!url) return false;
@@ -15,9 +36,13 @@ function ServicesSection({ services, loadingServices }) {
   };
 
   const toInternalPath = (url) => {
-    if (url.startsWith("/")) return url;
+    if (url.startsWith("/")) {
+      return normalizeInternalPath(url);
+    }
     try {
-      return new URL(url).pathname;
+      const parsedUrl = new URL(url);
+      const path = normalizeInternalPath(parsedUrl.pathname);
+      return `${path}${parsedUrl.search || ""}${parsedUrl.hash || ""}`;
     } catch {
       return url;
     }

@@ -22,6 +22,7 @@ import SingleDropDown from "../../../Components/SingleDropDown/SingleDropDown";
 import { CreateFile, getNewDatasetFolder } from "../../../../util/utils";
 import Docs from "../../../../Docs/Docs";
 import { apiService } from "../../../../services/api/apiService";
+import { projectsApi } from "../../../../services/api/projectsApi";
 import { withWorkspaceContext } from "../../../../services/api/matflowApi";
 import { syncSplitAndModelCache } from "../../../../util/modelDatasetSync";
 
@@ -39,8 +40,9 @@ function SplitDataset({
     const [testDataName, setTestDataName] = useState("");
     const [splittedName, setSplittedName] = useState("");
     const [test_size, setTestSize] = useState(0.2);
-    const [shuffle, setShuffle] = useState(false);
+    const [shuffle, setShuffle] = useState(true);
     const [random_state, setRandomState] = useState(42);
+    const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { projectId } = useParams();
     const splitDbName = projectId
@@ -55,17 +57,102 @@ function SplitDataset({
     const activeWorkspaceFilename = useSelector(
         (state) => state.workspace?.activeFilename,
     );
+    const workspaceList = useSelector((state) => state.workspace?.workspaces);
     const activeFolder = useSelector(
         (state) => state.uploadedFile.activeFolder,
     );
+    const [resolvedWorkspace, setResolvedWorkspace] = useState(null);
+
+    const getRoot = (value) => {
+        const normalized = String(value || "")
+            .replace(/\\/g, "/")
+            .trim();
+        if (!normalized) return "";
+        return normalized.split("/")[0] || "";
+    };
+
+    const folderRoot = getRoot(activeFolder);
+    const fileRoot = getRoot(activeCsvFile?.name);
+    const activeWorkspaceRoot = folderRoot || fileRoot;
+    const selectedFilename = activeCsvFile?.name?.split("/").pop() || "";
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const resolveWorkspace = async () => {
+            if (!projectId || (!activeWorkspaceRoot && !selectedFilename)) {
+                if (!cancelled) setResolvedWorkspace(null);
+                return;
+            }
+
+            try {
+                const wsList = await projectsApi.listWorkspaces(projectId);
+                const byName = wsList.find(
+                    (w) =>
+                        String(w?.name || "") ===
+                        String(activeWorkspaceRoot || ""),
+                );
+                const byFilename = wsList.find(
+                    (w) =>
+                        String(w?.dataset_filename || "") ===
+                        String(selectedFilename || ""),
+                );
+                const best = byName || byFilename || null;
+                if (!cancelled) setResolvedWorkspace(best);
+            } catch (err) {
+                console.warn(
+                    "[SplitDataset] Failed to resolve workspace from API:",
+                    err,
+                );
+                if (!cancelled) setResolvedWorkspace(null);
+            }
+        };
+
+        resolveWorkspace();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId, activeWorkspaceRoot, selectedFilename]);
+
+    const matchedWorkspace = Array.isArray(workspaceList)
+        ? workspaceList.find(
+              (w) => String(w?.name || "") === activeWorkspaceRoot,
+          )
+        : null;
+    const effectiveWorkspaceId =
+        resolvedWorkspace?.id ||
+        matchedWorkspace?.id ||
+        // Important: do not use stale activeWorkspaceId if active file already implies another workspace root.
+        (activeWorkspaceRoot ? undefined : activeWorkspaceId);
+    const effectiveWorkspaceFilename =
+        resolvedWorkspace?.dataset_filename ||
+        matchedWorkspace?.dataset_filename ||
+        activeWorkspaceFilename ||
+        selectedFilename;
 
     // Log workspace context on mount and when it changes
     useEffect(() => {
         console.log("[SplitDataset] Current Redux workspace state:", {
             activeWorkspaceId,
             activeWorkspaceFilename,
+            activeWorkspaceRoot,
+            selectedFilename,
+            resolvedWorkspace,
+            matchedWorkspace,
+            effectiveWorkspaceId,
+            effectiveWorkspaceFilename,
         });
-    }, [activeWorkspaceId, activeWorkspaceFilename]);
+    }, [
+        activeWorkspaceId,
+        activeWorkspaceFilename,
+        activeWorkspaceRoot,
+        selectedFilename,
+        resolvedWorkspace,
+        matchedWorkspace,
+        effectiveWorkspaceId,
+        effectiveWorkspaceFilename,
+    ]);
 
     const [visible, setVisible] = useState(false);
 
@@ -79,7 +166,7 @@ function SplitDataset({
             setStratify(initValue.stratify || "");
             setTestSize(Number(initValue.test_size ?? 0.2));
             setRandomState(Number(initValue.random_state ?? 42));
-            setShuffle(!!initValue.shuffle);
+            setShuffle(initValue.shuffle ?? true);
             setTestDataName(initValue.testDataName);
             setTrainDataName(initValue.trainDataName);
             setSplittedName(initValue.splittedName);
@@ -191,18 +278,24 @@ function SplitDataset({
                 throw new Error("Dataset Name already exist.");
             }
 
-            const wsCtx = activeWorkspaceId
+            if (activeWorkspaceRoot && !effectiveWorkspaceId) {
+                throw new Error(
+                    `Workspace resolution failed for selected dataset '${activeWorkspaceRoot}'. Please reselect the dataset from file tree.`,
+                );
+            }
+
+            const wsCtx = effectiveWorkspaceId
                 ? {
-                      workspace_id: activeWorkspaceId,
-                      filename:
-                          activeWorkspaceFilename ||
-                          activeCsvFile?.name?.split("/").pop(),
+                      workspace_id: effectiveWorkspaceId,
+                      filename: effectiveWorkspaceFilename,
                   }
                 : null;
 
             const splitRequest = wsCtx
                 ? withWorkspaceContext(
                       {
+                          split_name: splittedName,
+                          dataset_kind: whatKind,
                           target_variable,
                           stratify,
                           test_size,
@@ -213,6 +306,8 @@ function SplitDataset({
                       wsCtx,
                   )
                 : {
+                      split_name: splittedName,
+                      dataset_kind: whatKind,
                       target_variable,
                       stratify,
                       test_size,
@@ -266,6 +361,8 @@ function SplitDataset({
             }
 
             const finalData = processedData;
+            const resolvedSplitName =
+                String(finalData?.split_name || "").trim() || splittedName;
 
             const tempTrainName = "train_" + trainDataName;
             const tempTestName = "test_" + testDataName;
@@ -293,55 +390,82 @@ function SplitDataset({
             const testFilenameWithExt = tempTestName + fileExtension;
             const trainFilenameWithExt = tempTrainName + fileExtension;
 
-            await CreateFile({
-                projectId,
-                data: finalData.test,
-                filename: testFilenameWithExt,
-                foldername: splitFolder,
-            });
+            const serverTrainRef = finalData?.file_refs?.train;
+            const serverTestRef = finalData?.file_refs?.test;
 
-            await CreateFile({
-                projectId,
-                data: finalData.train,
-                filename: trainFilenameWithExt,
-                foldername: splitFolder,
-            });
+            const hasCanonicalWorkspaceRefs =
+                !!wsCtx &&
+                !!serverTrainRef?.workspace_id &&
+                !!serverTrainRef?.file &&
+                !!serverTestRef?.workspace_id &&
+                !!serverTestRef?.file;
+
+            let persistedTrainFilename = trainFilenameWithExt;
+            let persistedTestFilename = testFilenameWithExt;
+            let persistedFolder = splitFolder;
+            let persistedRefs = null;
+
+            if (hasCanonicalWorkspaceRefs) {
+                // Backend already saved split files in workspace/output/train_test.
+                persistedTrainFilename = serverTrainRef.file;
+                persistedTestFilename = serverTestRef.file;
+                persistedFolder = serverTrainRef.logical_folder || "train_test";
+                persistedRefs = {
+                    workspace_id: serverTrainRef.workspace_id,
+                    train_ref: serverTrainRef,
+                    test_ref: serverTestRef,
+                };
+            } else {
+                // Legacy/non-workspace flow: frontend persists files.
+                await CreateFile({
+                    projectId,
+                    data: finalData.test,
+                    filename: testFilenameWithExt,
+                    foldername: splitFolder,
+                });
+
+                await CreateFile({
+                    projectId,
+                    data: finalData.train,
+                    filename: trainFilenameWithExt,
+                    foldername: splitFolder,
+                });
+            }
 
             await updateDataInIndexedDB(splitDbName, [
                 ...(existingDatasets || []),
                 {
-                    [splittedName]: [
+                    [resolvedSplitName]: [
                         whatKind,
-                        trainFilenameWithExt,
-                        testFilenameWithExt,
+                        persistedTrainFilename,
+                        persistedTestFilename,
                         target_variable,
                         activeCsvFile.name,
-                        splitFolder,
+                        persistedFolder,
+                        persistedRefs,
                     ],
                 },
             ]);
 
             console.log("[SplitDataset] Split saved with metadata:", {
-                name: splittedName,
-                train: trainFilenameWithExt,
-                test: testFilenameWithExt,
+                name: resolvedSplitName,
+                train: persistedTrainFilename,
+                test: persistedTestFilename,
                 target: target_variable,
                 csvName: activeCsvFile.name,
-                folder: splitFolder,
+                folder: persistedFolder,
+                refs: persistedRefs,
             });
 
             dispatch(setReRender(!render));
-            toast.success(
-                `Train/test datasets saved: "${trainFilenameWithExt}" and "${testFilenameWithExt}".`,
-                {
-                    autoClose: 3200,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                    progress: undefined,
-                },
-            );
+            toast.success("Train/test datasets saved successfully.", {
+                autoClose: 3200,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+                progress: undefined,
+            });
 
             // Emit event to trigger stage completion and auto-redirect
             window.dispatchEvent(
@@ -364,82 +488,133 @@ function SplitDataset({
     };
 
     return (
-        <div className="mt-4 w-full">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-6">
-                <div className="md:col-span-2">
-                    <label className="flex items-center gap-1 min-h-[20px] text-sm font-medium text-gray-700 mb-1.5 whitespace-nowrap">
-                        <span>Target Variable</span>
-                        {whatKind && (
-                            <span className="font-semibold text-[#0D9488] text-xs">
-                                ({whatKind})
-                            </span>
-                        )}
-                    </label>
-                    <SingleDropDown
-                        columnNames={columnNames}
-                        onValueChange={handleTargetVariableChange}
-                        initValue={target_variable}
-                    />
-                </div>
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Stratify
-                    </label>
-                    <SingleDropDown
-                        columnNames={["-", ...columnNames]}
-                        onValueChange={setStratify}
-                        initValue={stratify}
-                    />
-                </div>
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        Test Size
-                    </label>
-                    <TextField
-                        required
-                        size="small"
-                        type="number"
-                        inputProps={{ step: 0.01 }}
-                        value={test_size}
-                        onChange={(e) => setTestSize(e.target.value)}
-                        fullWidth
-                        aria-label="Test size (fraction of dataset for test set)"
-                    />
-                </div>
-                <div className="md:col-span-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Random State
-                    </label>
-                    <Stack spacing={1.5} direction="row" alignItems="center">
-                        <span className="text-xs text-gray-600 w-6">0</span>
-                        <PrettoSlider
-                            aria-label="Random State Slider"
-                            min={0}
-                            max={250}
-                            step={1}
-                            value={random_state}
-                            onChange={(_, value) =>
-                                setRandomState(Number(value))
-                            }
-                            valueLabelDisplay="on"
-                        />
-                        <span className="text-xs text-gray-600 w-8">250</span>
-                    </Stack>
-                </div>
-                <div className="md:col-span-2 flex items-end">
-                    <SafeCheckbox
-                        size={type === "node" ? "sm" : "md"}
-                        isSelected={shuffle}
-                        onChange={(e) => setShuffle(e.valueOf())}
-                        aria-label="Shuffle dataset before split"
+        <div className="mt-4 w-full matflow-unified-input-height">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 md:p-5 shadow-sm">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h2 className="text-base font-semibold text-gray-800">
+                            Split Configuration
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-600">
+                            Choose target and test split ratio for this dataset.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowAdvancedSettings((prev) => !prev)}
+                        className="inline-flex items-center gap-2 self-start rounded-md border border-[#0D9488]/35 bg-white px-3 py-1.5 text-sm font-medium text-[#0D9488] hover:bg-[#0D9488]/10 transition-colors"
                     >
-                        <span className="text-sm font-medium text-gray-700">
-                            Shuffle
-                        </span>
-                    </SafeCheckbox>
+                        {showAdvancedSettings
+                            ? "Hide Advanced Settings"
+                            : "Show Advanced Settings"}
+                    </button>
+                </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div className="md:col-span-7">
+                        <label className="flex items-center gap-1 min-h-[20px] text-sm font-medium text-gray-700 mb-1.5 whitespace-nowrap">
+                            <span>Select Target Variable</span>
+                            {whatKind && (
+                                <span className="font-semibold text-[#0D9488] text-xs">
+                                    ({whatKind})
+                                </span>
+                            )}
+                        </label>
+                        <SingleDropDown
+                            columnNames={columnNames}
+                            onValueChange={handleTargetVariableChange}
+                            initValue={target_variable}
+                        />
+                    </div>
+                    <div className="md:col-span-5">
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            Test Size
+                        </label>
+                        <TextField
+                            required
+                            size="small"
+                            type="number"
+                            inputProps={{ step: 0.01 }}
+                            value={test_size}
+                            onChange={(e) => setTestSize(e.target.value)}
+                            fullWidth
+                            name="test_size"
+                            autoComplete="off"
+                            aria-label="Test size (fraction of dataset for test set)"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                            Recommended range: 0.1 to 0.3
+                        </p>
+                    </div>
                 </div>
             </div>
+            {showAdvancedSettings && (
+                <div className="mt-4 mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4 md:p-5 shadow-sm">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                        Advanced Split Settings
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div className="md:col-span-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Random State
+                            </label>
+                            <Stack
+                                spacing={1.5}
+                                direction="row"
+                                alignItems="center"
+                            >
+                                <span className="text-xs text-gray-600 w-6">
+                                    0
+                                </span>
+                                <PrettoSlider
+                                    aria-label="Random State Slider"
+                                    min={0}
+                                    max={250}
+                                    step={1}
+                                    value={random_state}
+                                    onChange={(_, value) =>
+                                        setRandomState(Number(value))
+                                    }
+                                    valueLabelDisplay="on"
+                                />
+                                <span className="text-xs text-gray-600 w-8">
+                                    250
+                                </span>
+                            </Stack>
+                        </div>
+                        <div className="md:col-span-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                Stratify
+                            </label>
+                            <SingleDropDown
+                                columnNames={["-", ...columnNames]}
+                                onValueChange={setStratify}
+                                initValue={stratify}
+                            />
+                        </div>
+                        <div className="md:col-span-2 flex items-end">
+                            <SafeCheckbox
+                                size={type === "node" ? "sm" : "md"}
+                                isSelected={shuffle}
+                                onChange={(e) => setShuffle(e.valueOf())}
+                                aria-label="Shuffle dataset before split"
+                            >
+                                <span className="text-sm font-medium text-gray-700">
+                                    Shuffle
+                                </span>
+                            </SafeCheckbox>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 md:p-5 shadow-sm">
+                <div className="mb-4">
+                    <h2 className="text-base font-semibold text-gray-800">
+                        Output Names
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                        Set train, test, and split dataset names before saving.
+                    </p>
+                </div>
                 <div
                     className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${type === "node" && "flex-col"}`}
                 >
@@ -454,6 +629,8 @@ function SplitDataset({
                             value={trainDataName}
                             onChange={(e) => setTrainDataName(e.target.value)}
                             fullWidth
+                            name="train_data_name"
+                            autoComplete="off"
                             aria-label="Train data filename"
                         />
                     </div>
@@ -468,6 +645,8 @@ function SplitDataset({
                             value={testDataName}
                             onChange={(e) => setTestDataName(e.target.value)}
                             fullWidth
+                            name="test_data_name"
+                            autoComplete="off"
                             aria-label="Test data filename"
                         />
                     </div>
@@ -484,6 +663,8 @@ function SplitDataset({
                                     setSplittedName(e.target.value)
                                 }
                                 fullWidth
+                                name="splitted_name"
+                                autoComplete="off"
                                 aria-label="Splitted dataset name"
                             />
                         </div>

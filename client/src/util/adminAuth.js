@@ -281,6 +281,49 @@ export const login = async (email, password) => {
 };
 
 /**
+ * Login through admin-only endpoint.
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{success: boolean, message?: string, isAdmin?: boolean}>}
+ */
+export const adminLogin = async (email, password) => {
+  try {
+    const data = await commonApi.auth.adminLogin(email, password);
+
+    if (data && data.success) {
+      if (data.access && data.refresh) {
+        setTokens(data.access, data.refresh);
+      }
+
+      if (data.email) {
+        localStorage.setItem(USER_EMAIL_KEY, data.email);
+      }
+
+      localStorage.setItem('userLoggedIn', 'true');
+      setAdminSession(true);
+      notifyAuthStateChanged();
+
+      return {
+        success: true,
+        message: data.message || 'Admin login successful',
+        isAdmin: true,
+      };
+    }
+
+    return {
+      success: false,
+      message: data.error || data.message || 'Login failed',
+    };
+  } catch (error) {
+    console.error('Error during admin login:', error);
+    return {
+      success: false,
+      message: error.message || 'Network error. Please try again.',
+    };
+  }
+};
+
+/**
  * Logout
  * @returns {Promise<{success: boolean, message?: string}>}
  */
@@ -314,5 +357,4 @@ export const logout = async () => {
 };
 
 // Legacy function names for backward compatibility
-export const adminLogin = login;
 export const adminLogout = logout;

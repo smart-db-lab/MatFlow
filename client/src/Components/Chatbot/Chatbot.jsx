@@ -102,7 +102,7 @@ const Chatbot = () => {
     'duplicate': { label: 'Duplicate', nodeId: '0-4' },
     'group': { label: 'Group', nodeId: '0-5' },
     'gen_dataset': { label: 'Generate Dataset', nodeId: 'gen_dataset' },
-    'feature_eng': { label: 'Materials Descriptor Generation', nodeId: '2' },
+    'feature_eng': { label: 'Manage Material Properties', nodeId: '2' },
     'model_build': { label: 'Generate Predictive Model', nodeId: '5' },
 
     // InvML operations - using exact nodeIds from FunctionTab
@@ -1396,7 +1396,13 @@ const Chatbot = () => {
           if (detectedFunction === 'info') {
             const totalRows = chatDataset.records.length;
             // Align with manual DatasetInformation.jsx (unique, nonNull, null%, dtype)
-            const infoHeaders = ['Column', 'Unique', 'Non-null', 'Null %', 'Dtype'];
+            const infoHeaders = [
+              'Property name',
+              'Number of Unique Values',
+              'No of NonNull Values',
+              'Null Percentage (℅)',
+              'Data Type',
+            ];
             const infoRows = chatDataset.headers.filter(h => h !== 'id').map(h => {
               const values = chatDataset.records.map(r => r[h]).filter(v => v !== undefined && v !== null);
               const uniqueCount = new Set(values).size;
@@ -1420,7 +1426,17 @@ const Chatbot = () => {
               return;
             }
             // Align with manual DatasetStatistics.jsx (count, min, max, std, mean, 25%, 50%, 75%)
-            const statsHeaders = ['Column', 'count', 'min', 'max', 'std', 'mean', '25%', '50%', '75%'];
+            const statsHeaders = [
+              'Property Name',
+              'No of Values',
+              'Minimum',
+              'Maximum',
+              'Standard Deviation',
+              'Mean - Average Value',
+              '25% - First Quartile',
+              '50% - Median',
+              '75% - Third Quartile',
+            ];
             const statsRows = numericColumns.map(col => {
               const values = chatDataset.records.map(r => toNumber(r[col])).filter(v => v != null);
               const count = values.length;

@@ -39,6 +39,8 @@ function DatasetCorrelation({ csvData }) {
     const isCorrelationLoading = loadingCount > 0;
     const isAnyLoading =
         isCorrelationLoading || isHeatmapLoading || isFeaturePairLoading;
+    const datasetName =
+        String(activeCsvFile?.name || "").split("/").pop() || "Selected Dataset";
 
     useEffect(() => {
         if (!activeCsvFile || !Array.isArray(csvData) || csvData.length === 0) {
@@ -257,38 +259,23 @@ function DatasetCorrelation({ csvData }) {
             });
             await saveHeatmapToProject(graphDiv);
             if (projectId) {
-                toast.success(
-                    "Heatmap downloaded and saved to project output.",
-                    {
-                        autoClose: 2600,
-                    },
-                );
+                toast.success("Heatmap saved successfully.");
             } else {
-                toast.success("Heatmap downloaded successfully.", {
-                    autoClose: 2200,
-                });
+                toast.success("Download started.");
             }
         } catch (error) {
             console.error("Failed to download heatmap image:", error);
-            toast.error("Failed to download/save heatmap. Please try again.", {
-                autoClose: 3200,
-            });
+            toast.error("Failed to download heatmap.");
         }
     };
 
     return (
         <div className="w-full">
-            <div className="mb-3">
+            <div className="mb-2">
                 <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-base font-semibold text-gray-900">
-                            Structure-Property Analysis
-                        </h2>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                            Compare feature relationships across selected
-                            columns
-                        </p>
-                    </div>
+                    <h2 className="text-base font-semibold text-gray-900">
+                        Structure-Property Analysis - {datasetName}
+                    </h2>
                     <button
                         type="button"
                         onClick={() => setShowControls((prev) => !prev)}

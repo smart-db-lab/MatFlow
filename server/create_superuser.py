@@ -38,4 +38,4 @@ else:
 
 print(f"\nEmail: admin@mail.com")
 print(f"Password: 12345678")
-print(f"\nYou can now login at: http://localhost:8000/admin/")
+print(f"\nYou can now login at: http://localhost:9000/admin/")

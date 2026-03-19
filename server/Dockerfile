@@ -27,8 +27,8 @@ COPY . .
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
-EXPOSE 8000
+EXPOSE 9000
 
 # Run the entrypoint through the shell so host-mounted files don't require executable bit
 ENTRYPOINT ["sh", "/app/entrypoint.sh"]
-CMD ["uvicorn", "Matflow.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "Matflow.asgi:application", "--host", "0.0.0.0", "--port", "9000", "--reload"]

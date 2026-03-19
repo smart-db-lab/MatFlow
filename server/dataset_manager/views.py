@@ -59,11 +59,27 @@ def rename_item(request):
             project_id = body.get('project_id')
             workspace_id = body.get('workspace_id')
 
+            if not current_name or not str(current_name).strip():
+                return JsonResponse({"error": "currentName is required."}, status=400)
+            if not new_name or not str(new_name).strip():
+                return JsonResponse({"error": "newName is required."}, status=400)
+
+            current_name = str(current_name).strip()
+            new_name = str(new_name).strip()
+
             workspace_obj, raw_sub_path, error_response = _resolve_workspace_for_request(
                 project_id=project_id,
                 folder=parent_folder,
                 workspace_id=workspace_id,
             )
+            # If parentFolder is empty, this can still be a valid workspace-root rename
+            # (currentName == workspace name shown in the sidebar).
+            if error_response and not str(parent_folder or "").strip() and not workspace_id:
+                workspace_obj, raw_sub_path, error_response = _resolve_workspace_for_request(
+                    project_id=project_id,
+                    folder=current_name,
+                    workspace_id=workspace_id,
+                )
             if error_response:
                 return error_response
 
@@ -80,6 +96,23 @@ def rename_item(request):
                 return JsonResponse(
                     {"message": f"Workspace renamed to '{new_name}' successfully!"},
                     status=200,
+                )
+
+            current_item_sub_path = (
+                f"{normalized_parent}/{current_name}" if normalized_parent else current_name
+            )
+            normalized_current_item_sub_path = _normalize_workspace_sub_path(
+                current_item_sub_path
+            )
+            if _is_reserved_workspace_folder_path(normalized_current_item_sub_path):
+                return JsonResponse(
+                    {
+                        "error": (
+                            "System folders cannot be renamed: original_dataset, output, charts, "
+                            "generated_datasets, models, train_test."
+                        )
+                    },
+                    status=400,
                 )
 
             current_path = os.path.join(parent_path, current_name)
@@ -153,21 +186,97 @@ def _resolve_workspace_file_path(project_id, folder, filename):
 
     Returns the absolute file path if a matching workspace is found, else None.
     """
+    return _resolve_workspace_file_path_for_context(
+        project_id=project_id,
+        folder=folder,
+        filename=filename,
+        workspace_id=None,
+    )
+
+
+READ_LOGICAL_FOLDER_MAP = {
+    "original_dataset": "original_dataset",
+    "train_test": "output/train_test",
+    "output/train_test": "output/train_test",
+    "generated_datasets": "output/generated_datasets",
+    "output/generated_datasets": "output/generated_datasets",
+    "charts": "output/charts",
+    "output/charts": "output/charts",
+    "models": "output/models",
+    "output/models": "output/models",
+}
+
+
+def _logical_folder_from_relative_path(relative_path):
+    normalized = _normalize_path(relative_path).lower()
+    if normalized.startswith("original_dataset/") or normalized == "original_dataset":
+        return "original_dataset"
+    if normalized.startswith("output/train_test/") or normalized == "output/train_test":
+        return "train_test"
+    if normalized.startswith("output/generated_datasets/") or normalized == "output/generated_datasets":
+        return "generated_datasets"
+    if normalized.startswith("output/charts/") or normalized == "output/charts":
+        return "charts"
+    if normalized.startswith("output/models/") or normalized == "output/models":
+        return "models"
+    return "original_dataset"
+
+
+def _resolve_workspace_file_path_for_context(project_id, folder, filename, workspace_id=None):
+    """
+    Resolve a workspace file path for reads.
+
+    Supports both:
+      1) explicit workspace_id + logical folder (preferred)
+      2) workspace-prefixed folder path (legacy)
+
+    Returns absolute file path if file exists, else None.
+    """
     from projects.models import Workspace
 
-    if not folder:
+    if not project_id or not filename:
         return None
 
-    parts = folder.split("/", 1)          # ["<ws_name>", "rest/of/path"]
-    ws_name = parts[0]
-    sub_path = parts[1] if len(parts) > 1 else ""
+    normalized_folder = _normalize_path(folder)
+    target_ws = None
+    sub_path = ""
 
-    try:
-        ws = Workspace.objects.get(project_id=project_id, name=ws_name)
-    except Exception:
+    if workspace_id:
+        try:
+            target_ws = Workspace.objects.get(pk=workspace_id, project_id=project_id)
+        except Workspace.DoesNotExist:
+            return None
+
+        # Allow folder to be logical ("train_test") or workspace-prefixed.
+        if normalized_folder == target_ws.name:
+            normalized_folder = ""
+        elif normalized_folder.startswith(f"{target_ws.name}/"):
+            normalized_folder = normalized_folder[len(target_ws.name) + 1 :]
+
+        logical_or_alias = _normalize_workspace_sub_path(normalized_folder)
+        sub_path = READ_LOGICAL_FOLDER_MAP.get(logical_or_alias, logical_or_alias)
+        if not sub_path:
+            sub_path = "original_dataset"
+    else:
+        # Legacy workspace-prefixed folder resolution.
+        if not normalized_folder:
+            return None
+        parts = normalized_folder.split("/", 1)  # ["<ws_name>", "rest/of/path"]
+        ws_name = parts[0]
+        raw_sub_path = parts[1] if len(parts) > 1 else ""
+        try:
+            target_ws = Workspace.objects.get(project_id=project_id, name=ws_name)
+        except Exception:
+            return None
+        logical_or_alias = _normalize_workspace_sub_path(raw_sub_path)
+        sub_path = READ_LOGICAL_FOLDER_MAP.get(logical_or_alias, logical_or_alias)
+        if not sub_path:
+            sub_path = "original_dataset"
+
+    candidate = os.path.abspath(os.path.join(target_ws.base_dir, sub_path, filename))
+    ws_base = os.path.abspath(target_ws.base_dir)
+    if os.path.commonpath([ws_base, candidate]) != ws_base:
         return None
-
-    candidate = os.path.join(ws.base_dir, sub_path, filename)
     return candidate if os.path.isfile(candidate) else None
 
 
@@ -188,6 +297,21 @@ WORKSPACE_OUTPUT_ALIAS_MAP = {
 
 def _normalize_path(path_value):
     return str(path_value or "").replace("\\", "/").strip("/")
+
+
+RESERVED_WORKSPACE_FOLDERS = {
+    "original_dataset",
+    "output",
+    "output/charts",
+    "output/generated_datasets",
+    "output/models",
+    "output/train_test",
+}
+
+
+def _is_reserved_workspace_folder_path(path_value):
+    normalized = _normalize_path(path_value).lower()
+    return normalized in RESERVED_WORKSPACE_FOLDERS
 
 
 def _resolve_workspace_for_request(project_id, folder="", workspace_id=None):
@@ -319,11 +443,17 @@ def get_dataset_structure(request):
     # If folder and file are provided, read the file content
     if folder or file:
         project_id = request.GET.get("project_id")
+        workspace_id = request.GET.get("workspace_id")
 
         # First try resolving through the workspace system
         file_path = None
         if project_id:
-            file_path = _resolve_workspace_file_path(project_id, folder, file)
+            file_path = _resolve_workspace_file_path_for_context(
+                project_id=project_id,
+                folder=folder,
+                filename=file,
+                workspace_id=workspace_id,
+            )
 
         # Fall back to the legacy dataset directory
         if not file_path:
@@ -496,6 +626,16 @@ def delete_item(request):
                     return JsonResponse({"message": "File deleted successfully!"}, status=200)
                 return JsonResponse({"error": "File not found"}, status=404)
             else:
+                if _is_reserved_workspace_folder_path(normalized_sub_path):
+                    return JsonResponse(
+                        {
+                            "error": (
+                                "System folders cannot be deleted: original_dataset, output, charts, "
+                                "generated_datasets, models, train_test."
+                            )
+                        },
+                        status=400,
+                    )
                 ws_path = os.path.join(
                     workspace_obj.base_dir,
                     normalized_sub_path,
@@ -786,6 +926,64 @@ def validate_request_parameters(request):
     return folder, file, None
 
 
+def _resolve_read_file_path(request, project_id, folder, file_name):
+    """Resolve read target path with workspace-first deterministic behavior."""
+    workspace_id = request.GET.get("workspace_id") or request.POST.get("workspace_id")
+
+    if workspace_id:
+        debug(
+            f"[read_file] Deterministic workspace read: project_id={project_id}, "
+            f"workspace_id={workspace_id}, folder='{folder}', file='{file_name}'",
+        )
+        ws_path = _resolve_workspace_file_path_for_context(
+            project_id=project_id,
+            folder=folder,
+            filename=file_name,
+            workspace_id=workspace_id,
+        )
+        if not ws_path:
+            normalized_folder = _normalize_path(folder or "") or "original_dataset"
+            return None, JsonResponse(
+                {
+                    "error": (
+                        f"File '{file_name}' not found in workspace '{workspace_id}' "
+                        f"folder '{normalized_folder}'."
+                    )
+                },
+                status=404,
+            )
+        debug(f"[read_file] Resolved workspace path: {ws_path}")
+        return ws_path, None
+
+    # Legacy behavior (project dataset + workspace-prefixed folder)
+    dataset_dir, error_response = get_project_dataset_dir(
+        request,
+        project_id_override=project_id,
+    )
+    if error_response:
+        return None, error_response
+
+    legacy_path = os.path.join(dataset_dir, folder or "", file_name)
+    if os.path.isfile(legacy_path):
+        debug(f"[read_file] Resolved legacy dataset path: {legacy_path}")
+        return legacy_path, None
+
+    ws_path = _resolve_workspace_file_path_for_context(
+        project_id=project_id,
+        folder=folder,
+        filename=file_name,
+        workspace_id=None,
+    )
+    if ws_path:
+        debug(f"[read_file] Resolved legacy workspace-prefixed path: {ws_path}")
+        return ws_path, None
+
+    return None, JsonResponse(
+        {"error": f"File '{file_name}' not found in folder '{folder}'."},
+        status=404,
+    )
+
+
 def get_validated_file_path(folder, file):
     """Construct and validate the full file path."""
     debug(f"Constructing file path for folder: '{folder}', file: '{file}'")
@@ -830,28 +1028,23 @@ def read_file(request):
     info("read_file function called")
     debug_obj(request, "Request")
 
-    dataset_dir, error_response = get_project_dataset_dir(request)
-    if error_response:
-        return error_response
-
     # Get and validate parameters
     folder, file, validation_error = validate_request_parameters(request)
     if validation_error:
         return validation_error
 
-    # Construct and validate file path in this project's dataset directory
-    file_path = os.path.join(dataset_dir, folder or "", file)
-    if not os.path.isfile(file_path):
-        # Try resolving through the workspace system before giving up
-        project_id = request.GET.get("project_id") or request.POST.get("project_id")
-        if project_id:
-            ws_path = _resolve_workspace_file_path(project_id, folder, file)
-            if ws_path:
-                file_path = ws_path
-            else:
-                return JsonResponse({"error": f"File '{file}' not found in folder '{folder}'."}, status=404)
-        else:
-            return JsonResponse({"error": f"File '{file}' not found in folder '{folder}'."}, status=404)
+    project_id = request.GET.get("project_id") or request.POST.get("project_id")
+    if not project_id:
+        return JsonResponse({"error": "project_id is required"}, status=400)
+
+    file_path, resolve_error = _resolve_read_file_path(
+        request,
+        project_id,
+        folder,
+        file,
+    )
+    if resolve_error:
+        return resolve_error
 
     # Check for pagination params
     page_param = request.GET.get('page')
@@ -995,27 +1188,107 @@ def fetch_file_as_attachment(request):
     """
     print("Endpoint accessed")  # Add debugging here
 
-    dataset_dir, error_response = get_project_dataset_dir(request)
-    if error_response:
-        return error_response
+    project_id = request.GET.get("project_id") or request.POST.get("project_id")
+    workspace_id = request.GET.get("workspace_id") or request.POST.get("workspace_id")
+    folder = request.GET.get("folder") or request.POST.get("folder")
+    file_name = request.GET.get("file") or request.POST.get("file")
+    file_path = request.GET.get('file_path')  # Legacy full path
 
-    file_path = request.GET.get('file_path')  # Expect a full path like /folder1/folder2/file.csv
+    full_file_path = None
 
-    if not file_path:
-        return JsonResponse({"error": "File path is required."}, status=400)
+    # Preferred: workspace-aware resolution via folder + file + project_id
+    if project_id and folder and file_name:
+        full_file_path = _resolve_workspace_file_path_for_context(
+            project_id=project_id,
+            folder=folder,
+            filename=file_name,
+            workspace_id=workspace_id,
+        )
+        if not full_file_path:
+            # Fallback: non-workspace project file path (backward compatibility)
+            dataset_dir, error_response = get_project_dataset_dir(
+                request,
+                project_id_override=project_id,
+            )
+            if error_response:
+                return error_response
+            candidate = os.path.join(dataset_dir, folder.strip('/'), file_name)
+            if os.path.isfile(candidate):
+                full_file_path = candidate
 
-    # Construct the full path to the file for this project
-    full_file_path = os.path.join(dataset_dir, file_path.strip('/'))
-    # print(full_file_path)
+    # Legacy: /api/fetch-file/?file_path=...
+    if not full_file_path and file_path:
+        dataset_dir, error_response = get_project_dataset_dir(request)
+        if error_response:
+            return error_response
+        candidate = os.path.join(dataset_dir, file_path.strip('/'))
+        if os.path.isfile(candidate):
+            full_file_path = candidate
 
-    if not os.path.isfile(full_file_path):
-        return JsonResponse({"error": f"File '{file_path}' not found."}, status=404)
+    if not full_file_path or not os.path.isfile(full_file_path):
+        return JsonResponse({"error": "Requested file not found."}, status=404)
 
     try:
         # Return the file as a response
         return FileResponse(open(full_file_path, 'rb'), as_attachment=True, filename=os.path.basename(full_file_path))
     except Exception as e:
         return JsonResponse({"error": f"Error fetching file: {str(e)}"}, status=500)
+
+
+@csrf_exempt
+def list_workspace_files(request):
+    """
+    Return canonical file metadata for a workspace.
+
+    Response shape:
+      {
+        "files": [
+          {
+            "workspace_id": "...",
+            "workspace_name": "...",
+            "project_id": "...",
+            "file": "train_x.csv",
+            "relative_path": "output/train_test/train_x.csv",
+            "logical_folder": "train_test"
+          }
+        ]
+      }
+    """
+    from projects.models import Workspace
+
+    project_id = request.GET.get("project_id") or request.POST.get("project_id")
+    workspace_id = request.GET.get("workspace_id") or request.POST.get("workspace_id")
+    if not project_id or not workspace_id:
+        return JsonResponse(
+            {"error": "project_id and workspace_id are required."},
+            status=400,
+        )
+
+    try:
+        ws = Workspace.objects.get(pk=workspace_id, project_id=project_id)
+    except Workspace.DoesNotExist:
+        return JsonResponse(
+            {"error": "Invalid workspace_id for project."},
+            status=400,
+        )
+
+    files = []
+    for root, _, filenames in os.walk(ws.base_dir):
+        for name in filenames:
+            absolute_path = os.path.join(root, name)
+            relative_path = os.path.relpath(absolute_path, ws.base_dir).replace("\\", "/")
+            files.append(
+                {
+                    "workspace_id": str(ws.id),
+                    "workspace_name": ws.name,
+                    "project_id": str(ws.project_id),
+                    "file": name,
+                    "relative_path": relative_path,
+                    "logical_folder": _logical_folder_from_relative_path(relative_path),
+                }
+            )
+
+    return JsonResponse({"files": files}, status=200)
 
 
 

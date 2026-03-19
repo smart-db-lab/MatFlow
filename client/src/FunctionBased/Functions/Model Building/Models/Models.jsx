@@ -29,6 +29,17 @@ function Models({ csvData }) {
   const [render, setRender] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const getModelCount = (datasetMap = {}) =>
+    Object.values(datasetMap).reduce(
+      (total, models) => total + Object.keys(models || {}).length,
+      0,
+    );
+
+  const toIndexedDbShape = (datasetMap = {}) =>
+    Object.entries(datasetMap).map(([datasetName, models]) => ({
+      [datasetName]: models,
+    }));
+
   const buildDatasetMap = (entries = []) => {
     const temp = {};
     (entries || []).forEach((entry) => {
@@ -44,6 +55,74 @@ function Models({ csvData }) {
     const fetchData = async () => {
       setIsLoading(true);
       try {
+        const serverRegistry = await apiService.matflow.ml
+          .listModelsRegistry(projectId)
+          .catch(() => null);
+        const serverModels = Array.isArray(serverRegistry?.models)
+          ? serverRegistry.models
+          : [];
+
+        if (serverModels.length > 0) {
+          const rawMap = {};
+          const activeMap = {};
+          const archivedMap = {};
+
+          serverModels.forEach((row) => {
+            const datasetName =
+              row.dataset_name || row.workspace_name || "Unknown Dataset";
+            const modelName = row.model_name;
+            if (!modelName) return;
+
+            const modelPayload = {
+              id: row.id,
+              metrics:
+                row.metrics && typeof row.metrics === "object"
+                  ? row.metrics
+                  : {},
+              metrics_table: Array.isArray(row.metrics_table)
+                ? row.metrics_table
+                : [],
+              y_pred: Array.isArray(row.y_pred) ? row.y_pred : [],
+              type: row.model_type || "",
+              regressor: row.algorithm || "",
+              model_deploy: row.model_deploy || "",
+              input_schema: Array.isArray(row.input_schema)
+                ? row.input_schema
+                : [],
+              feature_columns: Array.isArray(row.feature_columns)
+                ? row.feature_columns
+                : [],
+              workspace_model_file: row.model_file || "",
+              workspace_metadata_file: row.metadata_file || "",
+              split_folder: row.split_folder || "",
+            };
+
+            if (!rawMap[datasetName]) rawMap[datasetName] = {};
+            rawMap[datasetName][modelName] = modelPayload;
+
+            if (row.active) {
+              if (!activeMap[datasetName]) activeMap[datasetName] = {};
+              activeMap[datasetName][modelName] = modelPayload;
+            } else {
+              if (!archivedMap[datasetName]) archivedMap[datasetName] = {};
+              archivedMap[datasetName][modelName] = modelPayload;
+            }
+          });
+
+          setAllModels(rawMap);
+          setActiveModelsByDataset(activeMap);
+          setArchivedModelsByDataset(archivedMap);
+          setActiveDatasets(Object.keys(activeMap));
+          setArchivedDatasets(Object.keys(archivedMap));
+
+          // Keep local cache as fallback when server is temporarily unavailable.
+          await updateDataInIndexedDB(modelsDbName, toIndexedDbShape(rawMap)).catch(
+            () => {},
+          );
+          setIsLoading(false);
+          return;
+        }
+
         const synced = await syncSplitAndModelCache(projectId);
         const rawModels = await fetchDataFromIndexedDB(modelsDbName);
         const activeMap = buildDatasetMap(
@@ -73,6 +152,14 @@ function Models({ csvData }) {
 
   const handleDelete = async (datasetName, modelName) => {
     try {
+      const serverModelId = allModels?.[datasetName]?.[modelName]?.id;
+      if (serverModelId) {
+        await apiService.matflow.ml.deleteModelRegistry(serverModelId, projectId);
+        setRender(!render);
+        toast.success("Model deleted successfully.");
+        return;
+      }
+
       let allModels = await fetchDataFromIndexedDB(modelsDbName).catch(() => []);
       if (!Array.isArray(allModels)) {
         allModels = [];
@@ -103,7 +190,7 @@ function Models({ csvData }) {
       }
       await updateDataInIndexedDB(modelsDbName, allModels);
       setRender(!render);
-      toast.success(`Model deleted: "${modelName}".`);
+      toast.success("Model deleted successfully.");
     } catch (error) {
       toast.error("Failed to delete model.");
     }
@@ -111,11 +198,35 @@ function Models({ csvData }) {
 
   const handleDownload = async (datasetName, modelName) => {
     try {
+      const serverModel = allModels?.[datasetName]?.[modelName];
+      if (serverModel?.id) {
+        const response = await apiService.matflow.ml.downloadModelRegistry(
+          serverModel.id,
+          projectId,
+        );
+        if (!response.ok) {
+          throw new Error("Model file unavailable.");
+        }
+        const blob = await response.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const fileName =
+          serverModel.workspace_model_file || `${modelName}.joblib`;
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+        toast.success("Download started.");
+        return;
+      }
+
       const modelPayload = allModels?.[datasetName]?.[modelName];
       const modelEncoded = modelPayload?.model_deploy;
 
       if (!modelEncoded) {
-        toast.error("Model file is not available for download.");
+        toast.error("Model file unavailable.");
         return;
       }
 
@@ -200,25 +311,16 @@ function Models({ csvData }) {
         URL.revokeObjectURL(downloadUrl);
       }
 
-      let persistedInWorkspace = false;
       try {
-        persistedInWorkspace = await persistInWorkspace();
+        await persistInWorkspace();
       } catch (_) {
-        persistedInWorkspace = false;
+        // Workspace persistence is best-effort.
       }
 
       if (localStatus === "saved") {
-        toast.success(
-          persistedInWorkspace
-            ? `Model saved locally and in workspace: "${fileName}".`
-            : `Model saved locally: "${fileName}".`,
-        );
+        toast.success("Model saved successfully.");
       } else {
-        toast.success(
-          persistedInWorkspace
-            ? `Download started. Model also saved in workspace: "${fileName}".`
-            : `Download started: "${fileName}".`,
-        );
+        toast.success("Download started.");
       }
     } catch (error) {
       toast.error("Failed to download model.");
@@ -355,23 +457,35 @@ function Models({ csvData }) {
       </div>
     );
 
-  return (
-    <div className="my-6 space-y-4">
-      {renderDatasetSection({
-        title: "Active Models",
-        subtitle: "Available in current model building flow.",
-        datasets: activeDatasets,
-        datasetModelMap: activeModelsByDataset,
-        sectionType: "active",
-      })}
+  const totalModelCount =
+    getModelCount(activeModelsByDataset) + getModelCount(archivedModelsByDataset);
+  const shouldEnableScrollForLargeLists = totalModelCount > 10;
 
-      {renderDatasetSection({
-        title: "Archived Models",
-        subtitle: "These models can still be downloaded or permanently deleted.",
-        datasets: archivedDatasets,
-        datasetModelMap: archivedModelsByDataset,
-        sectionType: "archived",
-      })}
+  return (
+    <div className="mt-2 mb-3 matflow-unified-input-height">
+      <div
+        className={
+          shouldEnableScrollForLargeLists
+            ? "space-y-4 max-h-[62vh] overflow-y-auto pr-1"
+            : "space-y-4"
+        }
+      >
+        {renderDatasetSection({
+          title: "Active Models",
+          subtitle: "Available in current model building flow.",
+          datasets: activeDatasets,
+          datasetModelMap: activeModelsByDataset,
+          sectionType: "active",
+        })}
+
+        {renderDatasetSection({
+          title: "Archived Models",
+          subtitle: "These models can still be downloaded or permanently deleted.",
+          datasets: archivedDatasets,
+          datasetModelMap: archivedModelsByDataset,
+          sectionType: "archived",
+        })}
+      </div>
     </div>
   );
 }
