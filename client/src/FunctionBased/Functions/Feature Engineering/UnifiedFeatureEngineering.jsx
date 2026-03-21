@@ -50,6 +50,8 @@ function UnifiedFeatureEngineering({ csvData }) {
         } else if (
             activeFunction === "Feature Engineering" ||
             activeFunction === "Data Prep" ||
+            activeFunction === "Manage Material Properties" ||
+            activeFunction === "Materials Feature Engineering" ||
             activeFunction === "Materials Descriptor Generation"
         ) {
             setSelectedType("Add/Modify");
@@ -97,7 +99,7 @@ function UnifiedFeatureEngineering({ csvData }) {
     };
 
     return (
-        <div className="w-full h-full flex flex-col">
+        <div className="w-full h-full flex flex-col matflow-unified-input-height">
             <FeatureEngineeringSelector
                 selectedType={selectedType}
                 onTypeChange={handleTypeChange}

@@ -108,7 +108,15 @@ def report_graph(data, file):
             "name": model_name,
             "type": "bar",
             "data": values,
-            "itemStyle": {"color": colors[j % len(colors)]},
+            # Keep bar widths visually balanced across few/many categories.
+            "barMaxWidth": 30,
+            "barMinWidth": 12,
+            "barCategoryGap": "35%",
+            "barGap": "15%",
+            "itemStyle": {
+                "color": colors[j % len(colors)],
+                "borderRadius": [4, 4, 0, 0] if orientation == "Vertical" else [0, 4, 4, 0],
+            },
             "label": {
                 "show": False
             }

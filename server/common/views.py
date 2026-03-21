@@ -9,8 +9,9 @@ from .models import *
 from .serializers import *
 from rest_framework.permissions import AllowAny, IsAdminUser
 from core.permissions import IsSuperUser
-from core.base import BaseViewSet
+from core.BaseViewSet import BaseViewSet
 from .schema import *
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 
 @JournalSchema
@@ -213,6 +214,19 @@ class FAQViewSet(BaseViewSet):
         if self.action in ["list", "retrieve"]:
             return [AllowAny()]
         return [IsSuperUser()]
+
+
+# ─── CSRF Bootstrap ────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+@ensure_csrf_cookie
+def csrf_cookie(request):
+    """
+    Public endpoint to set Django CSRF cookie.
+    Used by the frontend before state-changing requests.
+    """
+    return Response({"detail": "CSRF cookie set"}, status=status.HTTP_200_OK)
 
 
 # ─── Visitor Tracking ──────────────────────────────────────────────────────────

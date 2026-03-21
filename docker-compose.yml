@@ -7,9 +7,9 @@ x-server-defaults: &server-defaults
     env_file:
         - ./server/.env
     environment:
-        DJANGO_SETTINGS_MODULE: Matflow.settings
-        CELERY_BROKER_URL: redis://redis:6379/0
-        CELERY_RESULT_BACKEND: redis://redis:6379/0
+         DJANGO_SETTINGS_MODULE: Matflow.settings
+         CELERY_BROKER_URL: redis://redis:6379/0
+         CELERY_RESULT_BACKEND: redis://redis:6379/0
 
 
     volumes:
@@ -34,10 +34,10 @@ services:
             - --host
             - 0.0.0.0
             - --port
-            - "8000"
+            - "9000"
             - --reload
         ports:
-            - "8000:8000"
+            - "9000:9000"
 
     worker:
         <<: *server-defaults
@@ -46,7 +46,7 @@ services:
             CELERY_BROKER_URL: redis://redis:6379/0
             CELERY_RESULT_BACKEND: redis://redis:6379/0
             LD_LIBRARY_PATH: /opt/conda/lib
-        command:
+        entrypoint:
             - celery
             - -A
             - Matflow
@@ -63,12 +63,12 @@ services:
         env_file:
             - ./client/.env.docker
         ports:
-            - "5173:5173"
+            - "6060:6060"
         volumes:
             - ./client:/app
             - /app/node_modules
         environment:
-            VITE_PROXY_TARGET: http://server:8000
+            VITE_PROXY_TARGET: http://server:9000
         depends_on:
             - server
 

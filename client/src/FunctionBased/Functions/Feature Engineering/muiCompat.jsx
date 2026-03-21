@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import TextField from "@mui/material/TextField";
@@ -19,50 +19,78 @@ const mapColor = (color) => {
   return "primary";
 };
 
-export const Input = ({
-  label,
-  fullWidth,
-  size = "sm",
-  type = "text",
-  step,
-  value,
-  onChange,
-  placeholder,
-  className,
-  bordered,
-  clearable,
-  ...rest
-}) => (
-  <TextField
-    label={label}
-    fullWidth={Boolean(fullWidth)}
-    size={size === "md" ? "medium" : "small"}
-    type={type}
-    inputProps={step !== undefined ? { step } : undefined}
-    value={value ?? ""}
-    onChange={onChange}
-    placeholder={placeholder}
-    className={className}
-    variant="outlined"
-    sx={{
-      "& .MuiOutlinedInput-root": {
-        borderRadius: "12px",
-        minHeight: "42px",
-        backgroundColor: "#ffffff",
-      },
-      "& .MuiInputBase-input": {
-        fontSize: "0.95rem",
-      },
-      "& .MuiInputLabel-root": {
-        fontSize: "0.86rem",
-      },
-      "& .MuiInputLabel-root.MuiInputLabel-shrink": {
-        fontSize: "0.8rem",
-      },
-    }}
-    {...rest}
-  />
-);
+export const Input = (props) => {
+  const {
+    label,
+    fullWidth,
+    size = "sm",
+    type = "text",
+    step,
+    value,
+    onChange,
+    placeholder,
+    className,
+    bordered,
+    clearable,
+    ...rest
+  } = props;
+
+  // Keep controlled/uncontrolled mode stable for component lifetime:
+  // - If caller passes `value` prop, always use controlled mode.
+  // - If not passed, leave input uncontrolled.
+  const hasValueProp = Object.prototype.hasOwnProperty.call(props, "value");
+  const [internalValue, setInternalValue] = useState(
+    hasValueProp ? value ?? "" : "",
+  );
+
+  useEffect(() => {
+    if (hasValueProp) {
+      setInternalValue(value ?? "");
+    }
+  }, [hasValueProp, value]);
+
+  const resolvedValue = hasValueProp ? value ?? "" : internalValue;
+  const handleChange = (event) => {
+    if (!hasValueProp) {
+      setInternalValue(event?.target?.value ?? "");
+    }
+    onChange?.(event);
+  };
+
+  return (
+    <TextField
+      label={label}
+      fullWidth={Boolean(fullWidth)}
+      size={size === "md" ? "medium" : "small"}
+      type={type}
+      inputProps={step !== undefined ? { step } : undefined}
+      value={resolvedValue}
+      onChange={handleChange}
+      placeholder={placeholder}
+      className={className}
+      variant="outlined"
+      sx={{
+        "& .MuiOutlinedInput-root": {
+          borderRadius: "12px",
+          minHeight: "35px",
+          backgroundColor: "#ffffff",
+        },
+        "& .MuiInputBase-input": {
+          fontSize: "0.95rem",
+          paddingTop: "7px",
+          paddingBottom: "7px",
+        },
+        "& .MuiInputLabel-root": {
+          fontSize: "0.86rem",
+        },
+        "& .MuiInputLabel-root.MuiInputLabel-shrink": {
+          fontSize: "0.8rem",
+        },
+      }}
+      {...rest}
+    />
+  );
+};
 
 export const Textarea = ({
   label,
@@ -90,33 +118,61 @@ export const Textarea = ({
   />
 );
 
-export const Checkbox = ({
-  children,
-  onChange,
-  color = "primary",
-  size = "medium",
-  isSelected,
-  checked,
-  ...rest
-}) => (
-  <FormControlLabel
-    control={
-      <MuiCheckbox
-        color={mapColor(color)}
-        size={size === "sm" ? "small" : size}
-        checked={typeof isSelected === "boolean" ? isSelected : checked}
-        onChange={(event) =>
-          onChange?.({
-            target: event.target,
-            valueOf: () => event.target.checked,
-          })
-        }
-        {...rest}
-      />
+export const Checkbox = (props) => {
+  const {
+    children,
+    onChange,
+    color = "primary",
+    size = "medium",
+    isSelected,
+    checked,
+    defaultChecked,
+    ...rest
+  } = props;
+
+  // Keep mode stable for component lifetime to avoid MUI
+  // "uncontrolled -> controlled" SwitchBase warnings.
+  const hasCheckedProp =
+    Object.prototype.hasOwnProperty.call(props, "isSelected") ||
+    Object.prototype.hasOwnProperty.call(props, "checked");
+
+  const [internalChecked, setInternalChecked] = useState(
+    Boolean(isSelected ?? checked ?? defaultChecked ?? false),
+  );
+
+  useEffect(() => {
+    if (hasCheckedProp) {
+      setInternalChecked(Boolean(isSelected ?? checked ?? false));
     }
-    label={children}
-  />
-);
+  }, [hasCheckedProp, isSelected, checked]);
+
+  const resolvedChecked = hasCheckedProp
+    ? Boolean(isSelected ?? checked ?? false)
+    : internalChecked;
+
+  return (
+    <FormControlLabel
+      control={
+        <MuiCheckbox
+          color={mapColor(color)}
+          size={size === "sm" ? "small" : size}
+          checked={resolvedChecked}
+          onChange={(event) => {
+            if (!hasCheckedProp) {
+              setInternalChecked(event.target.checked);
+            }
+            onChange?.({
+              target: event.target,
+              valueOf: () => event.target.checked,
+            });
+          }}
+          {...rest}
+        />
+      }
+      label={children}
+    />
+  );
+};
 
 export const Radio = ({ value, children, color = "primary" }) => (
   <FormControlLabel

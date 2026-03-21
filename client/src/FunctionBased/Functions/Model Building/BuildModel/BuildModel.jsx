@@ -4,7 +4,7 @@ import {
     DialogContent,
     TextField,
 } from "@mui/material";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
@@ -99,6 +99,7 @@ function BuildModel({
     const [allRegressor, setAllRegressor] = useState();
     const [regressor, setRegressor] = useState();
     const [allDatasetName, setAllDatasetName] = useState([]);
+    const [selectedDataset, setSelectedDataset] = useState("");
     const [loading, setLoading] = useState(false);
     const [whatKind, setWhatKind] = useState();
     const dispatch = useDispatch();
@@ -123,9 +124,14 @@ function BuildModel({
     const [trainFilename, setTrainFilename] = useState("");
     const [testFilename, setTestFilename] = useState("");
     const [splitFolder, setSplitFolder] = useState("");
+    const [splitRegistryEntries, setSplitRegistryEntries] = useState([]);
+    const hasUserSelectedDatasetRef = useRef(false);
+    const [currentSelectedRegistry, setCurrentSelectedRegistry] =
+        useState(null);
     const activeWorkspaceId = useSelector(
         (state) => state.workspace?.activeWorkspaceId,
     );
+    const render = useSelector((state) => state.uploadedFile.rerender);
 
     const [visible, setVisible] = useState(false);
 
@@ -152,13 +158,83 @@ function BuildModel({
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const synced = await syncSplitAndModelCache(projectId);
-            setAllDatasetName(synced.splitNames || []);
+            try {
+                const synced = await syncSplitAndModelCache(projectId);
+                const localSplitNames = Array.isArray(synced?.splitNames)
+                    ? synced.splitNames
+                    : [];
+                if (projectId && activeWorkspaceId) {
+                    const registry =
+                        await apiService.matflow.ml.listSplitsRegistry(
+                            projectId,
+                            activeWorkspaceId,
+                            true,
+                        );
+                    const splits = Array.isArray(registry?.splits)
+                        ? registry.splits
+                        : [];
+                    const orderedSplits = [...splits].sort(
+                        (a, b) =>
+                            new Date(b?.updated_at || 0).getTime() -
+                            new Date(a?.updated_at || 0).getTime(),
+                    );
+                    setSplitRegistryEntries(orderedSplits);
+                    const registrySplitNames = orderedSplits
+                        .map((row) => String(row?.split_name || "").trim())
+                        .filter(Boolean);
+                    const mergedSplitNames = [
+                        ...new Set([...registrySplitNames, ...localSplitNames]),
+                    ];
+                    setAllDatasetName(mergedSplitNames);
+                } else {
+                    setSplitRegistryEntries([]);
+                    setAllDatasetName(localSplitNames);
+                }
+            } catch (err) {
+                console.warn(
+                    "Split registry fetch failed, using local cache",
+                    err,
+                );
+                const synced = await syncSplitAndModelCache(projectId);
+                setSplitRegistryEntries([]);
+                setAllDatasetName(synced.splitNames || []);
+            }
             setLoading(false);
         };
 
         fetchData();
-    }, [projectId]);
+    }, [projectId, activeWorkspaceId, render]);
+
+    useEffect(() => {
+        if (type !== "function") return;
+        if (!Array.isArray(allDatasetName) || allDatasetName.length === 0) {
+            setSelectedDataset("");
+            return;
+        }
+
+        const hasCurrentSelection =
+            !!current_dataset && allDatasetName.includes(current_dataset);
+
+        if (hasUserSelectedDatasetRef.current && hasCurrentSelection) {
+            if (selectedDataset !== current_dataset) {
+                setSelectedDataset(current_dataset);
+            }
+            return;
+        }
+
+        const defaultDataset = hasCurrentSelection
+            ? current_dataset
+            : allDatasetName[0];
+        if (!defaultDataset) return;
+
+        if (selectedDataset !== defaultDataset) {
+            setSelectedDataset(defaultDataset);
+        }
+
+        if (!hasCurrentSelection) {
+            handleDatasetChange(defaultDataset, { fromAuto: true });
+        }
+    }, [allDatasetName, current_dataset, selectedDataset, type]);
 
     useEffect(() => {
         if (type === "node" && nodeData) {
@@ -185,7 +261,10 @@ function BuildModel({
         }
     }, [nodeData]);
 
-    const handleDatasetChange = async (e) => {
+    const handleDatasetChange = async (e, options = {}) => {
+        const { fromAuto = false } = options;
+        hasUserSelectedDatasetRef.current = !fromAuto;
+        setSelectedDataset(e || "");
         try {
             setTrain(null);
             setTest(null);
@@ -193,13 +272,129 @@ function BuildModel({
             setCurrentDataset(null);
             setIsDatasetReady(false);
 
+            const selectedRegistry = splitRegistryEntries.find(
+                (row) => String(row?.split_name || "") === String(e || ""),
+            );
+
+            if (selectedRegistry) {
+                // Store selectedRegistry in state for later use in buildModel call
+                setCurrentSelectedRegistry(selectedRegistry);
+
+                const trainRef = selectedRegistry?.file_refs?.train;
+                const testRef = selectedRegistry?.file_refs?.test;
+                const readWorkspaceId =
+                    selectedRegistry.workspace_id || activeWorkspaceId;
+
+                const resolvedTrainFilename =
+                    trainRef?.file || selectedRegistry.train_filename || "";
+                const resolvedTestFilename =
+                    testRef?.file || selectedRegistry.test_filename || "";
+                const resolvedSplitFolder =
+                    trainRef?.logical_folder ||
+                    selectedRegistry.split_folder ||
+                    "train_test";
+                const resolvedKind =
+                    selectedRegistry.dataset_kind || "Continuous";
+                const resolvedTarget = selectedRegistry.target_var || "";
+
+                setWhatKind(resolvedKind);
+                setTrainFilename(resolvedTrainFilename);
+                setTestFilename(resolvedTestFilename);
+                setSplitFolder(resolvedSplitFolder);
+
+                const loadingToast = toast.info(
+                    "Loading dataset, please wait...",
+                    {
+                        autoClose: false,
+                        hideProgressBar: false,
+                        closeOnClick: false,
+                        pauseOnHover: true,
+                        draggable: false,
+                        progress: undefined,
+                    },
+                );
+
+                try {
+                    const trainData = await ReadFile({
+                        projectId,
+                        workspaceId: readWorkspaceId,
+                        logicalFolder: trainRef?.logical_folder || "train_test",
+                        filename: resolvedTrainFilename,
+                    });
+                    const testData = await ReadFile({
+                        projectId,
+                        workspaceId: readWorkspaceId,
+                        logicalFolder: testRef?.logical_folder || "train_test",
+                        filename: resolvedTestFilename,
+                    });
+
+                    toast.dismiss(loadingToast);
+
+                    if (
+                        !Array.isArray(trainData) ||
+                        !Array.isArray(testData) ||
+                        trainData.length === 0 ||
+                        testData.length === 0
+                    ) {
+                        throw new Error(
+                            "Train/test split files exist but contain no rows.",
+                        );
+                    }
+
+                    if (resolvedKind === "Continuous") {
+                        setAllRegressor(REGRESSOR);
+                        setRegressor(REGRESSOR[0]);
+                        dispatch(setReg(REGRESSOR[0]));
+                        dispatch(setType("regressor"));
+                        setModelName(
+                            buildProfessionalModelName(REGRESSOR[0], e),
+                        );
+                    } else {
+                        setAllRegressor(CLASSIFIER);
+                        setRegressor(CLASSIFIER[0]);
+                        dispatch(setReg(CLASSIFIER[0]));
+                        dispatch(setType("classifier"));
+                        setModelName(
+                            buildProfessionalModelName(CLASSIFIER[0], e),
+                        );
+                    }
+
+                    dispatch(setTargetVariable(resolvedTarget));
+                    dispatch(setHyperparameterData({}));
+                    dispatch(setModelSetting({}));
+                    setNicherData("");
+                    setCurrentDataset(e);
+                    setTrain(trainData);
+                    setTest(testData);
+                    setIsDatasetReady(true);
+                    return;
+                } catch (err) {
+                    toast.dismiss(loadingToast);
+                    setIsDatasetReady(false);
+                    toast.error(`Error loading registry split: ${err.message}`);
+                    return;
+                }
+            }
+
             let tempDatasets = await fetchDataFromIndexedDB(splitDbName);
             for (const val of tempDatasets) {
                 if (e === Object.keys(val)[0]) {
                     setWhatKind(val[e][0]);
-                    setTrainFilename(val[e][1] || "");
-                    setTestFilename(val[e][2] || "");
-                    setSplitFolder(val[e][5] || "");
+                    const splitMeta = val[e] || [];
+                    const refs = splitMeta[6] || {};
+                    const trainRef = refs.train_ref || null;
+                    const testRef = refs.test_ref || null;
+
+                    const resolvedTrainFilename =
+                        trainRef?.file || splitMeta[1] || "";
+                    const resolvedTestFilename =
+                        testRef?.file || splitMeta[2] || "";
+                    const resolvedSplitFolder =
+                        trainRef?.logical_folder || splitMeta[5] || "";
+
+                    setTrainFilename(resolvedTrainFilename);
+                    setTestFilename(resolvedTestFilename);
+                    setSplitFolder(resolvedSplitFolder);
 
                     // Show loading message
                     const loadingToast = toast.info(
@@ -216,25 +411,69 @@ function BuildModel({
 
                     try {
                         // Log the file paths we're trying to load for debugging
-                        const trainPath = `${val[e][5] || ""}/${val[e][1]}`;
-                        const testPath = `${val[e][5] || ""}/${val[e][2]}`;
+                        const trainPath = `${resolvedSplitFolder || ""}/${resolvedTrainFilename}`;
+                        const testPath = `${resolvedSplitFolder || ""}/${resolvedTestFilename}`;
                         console.log("Attempting to load train/test files:", {
                             trainPath,
                             testPath,
-                            splitData: val[e],
+                            splitData: splitMeta,
+                            refs,
                         });
 
                         // Attempt to read files - try multiple potential locations
                         let trainData, testData;
-                        const folders = [val[e][5] || "", "train_test", ""]; // Try original folder, train_test, and root
+                        const readWorkspaceId =
+                            trainRef?.workspace_id ||
+                            testRef?.workspace_id ||
+                            activeWorkspaceId ||
+                            undefined;
 
-                        // Try to load train file
-                        for (const folder of folders) {
+                        const candidateFolders = [
+                            resolvedSplitFolder || "",
+                            "train_test",
+                            "",
+                        ];
+                        const folders = [...new Set(candidateFolders)];
+
+                        // Preferred: deterministic workspace-aware reads with logical folder.
+                        if (
+                            trainRef?.logical_folder &&
+                            testRef?.logical_folder
+                        ) {
                             try {
                                 trainData = await ReadFile({
                                     projectId,
+                                    workspaceId:
+                                        trainRef.workspace_id ||
+                                        readWorkspaceId,
+                                    logicalFolder: trainRef.logical_folder,
+                                    filename: resolvedTrainFilename,
+                                });
+                                testData = await ReadFile({
+                                    projectId,
+                                    workspaceId:
+                                        testRef.workspace_id || readWorkspaceId,
+                                    logicalFolder: testRef.logical_folder,
+                                    filename: resolvedTestFilename,
+                                });
+                            } catch (deterministicReadError) {
+                                console.log(
+                                    "Deterministic workspace read failed, using legacy fallback:",
+                                    deterministicReadError?.message,
+                                );
+                            }
+                        }
+
+                        // Try to load train file
+                        for (const folder of folders) {
+                            if (trainData && trainData.length > 0) break;
+                            try {
+                                trainData = await ReadFile({
+                                    projectId,
+                                    workspaceId: readWorkspaceId,
+                                    logicalFolder: folder,
                                     foldername: folder,
-                                    filename: val[e][1] + "",
+                                    filename: resolvedTrainFilename + "",
                                 });
                                 if (trainData && trainData.length > 0) {
                                     console.log(
@@ -252,11 +491,14 @@ function BuildModel({
 
                         // Try to load test file
                         for (const folder of folders) {
+                            if (testData && testData.length > 0) break;
                             try {
                                 testData = await ReadFile({
                                     projectId,
+                                    workspaceId: readWorkspaceId,
+                                    logicalFolder: folder,
                                     foldername: folder,
-                                    filename: val[e][2] + "",
+                                    filename: resolvedTestFilename + "",
                                 });
                                 if (testData && testData.length > 0) {
                                     console.log(
@@ -284,9 +526,13 @@ function BuildModel({
                         ) {
                             const missingFiles = [];
                             if (!trainData || !trainData.length)
-                                missingFiles.push(`Train: ${val[e][1]}`);
+                                missingFiles.push(
+                                    `Train: ${resolvedTrainFilename}`,
+                                );
                             if (!testData || !testData.length)
-                                missingFiles.push(`Test: ${val[e][2]}`);
+                                missingFiles.push(
+                                    `Test: ${resolvedTestFilename}`,
+                                );
 
                             toast.error(
                                 `Failed to load train/test data files:\n${missingFiles.join("\n")}\n\nTried in folders: ${folders.join(", ")}\n\nPlease split your dataset again to regenerate the files.`,
@@ -409,22 +655,42 @@ function BuildModel({
                 );
             }
 
-            // Model name validation
-            let tempModel = await fetchDataFromIndexedDB(modelsDbName);
             const typedModelName = String(model_name || "").trim();
             const finalModelName =
                 typedModelName ||
                 buildProfessionalModelName(regressor, current_dataset);
+
+            // Model name validation (server-first, IndexedDB fallback)
+            const serverRegistry = await apiService.matflow.ml
+                .listModelsRegistry(projectId)
+                .catch(() => null);
+            const serverModels = Array.isArray(serverRegistry?.models)
+                ? serverRegistry.models
+                : [];
+            const duplicateOnServer = serverModels.some(
+                (row) =>
+                    String(row?.model_name || "")
+                        .trim()
+                        .toLowerCase() === finalModelName.toLowerCase(),
+            );
+            if (duplicateOnServer) {
+                throw new Error(
+                    "Model name already exists! Please choose a different name.",
+                );
+            }
+
+            const tempModel = await fetchDataFromIndexedDB(modelsDbName).catch(
+                () => [],
+            );
             tempModel.forEach((val) => {
-                if (current_dataset === Object.keys(val)[0]) {
-                    if (
-                        val[current_dataset] &&
-                        val[current_dataset][finalModelName]
-                    ) {
-                        throw new Error(
-                            "Model name already exists! Please choose a different name.",
-                        );
-                    }
+                if (
+                    current_dataset === Object.keys(val)[0] &&
+                    val[current_dataset] &&
+                    val[current_dataset][finalModelName]
+                ) {
+                    throw new Error(
+                        "Model name already exists! Please choose a different name.",
+                    );
                 }
             });
 
@@ -456,15 +722,22 @@ function BuildModel({
             // Close the loading toast
             toast.dismiss(loadingToast);
 
+            // Extract source filename from stored selectedRegistry
+            const sourceFilename =
+                currentSelectedRegistry?.file_refs?.source?.file || undefined;
+
             const data = await apiService.matflow.ml.buildModel({
                 test,
                 train,
                 target_var: target_variable,
+                dataset_name: current_dataset,
+                split_folder: splitFolder || "",
                 type: Type,
                 model_name: finalModelName,
                 workspace_id: activeWorkspaceId || undefined,
                 train_filename: trainFilename || undefined,
                 test_filename: testFilename || undefined,
+                source_filename: sourceFilename, // NEW: send source dataset filename
                 [Type === "regressor" ? "regressor" : "classifier"]: reg,
                 ...model_setting,
                 file: csvData,
@@ -541,17 +814,7 @@ function BuildModel({
             await updateDataInIndexedDB(modelsDbName, allModels);
             setModelName(finalModelName);
 
-            toast.success(
-                `Model Built Successfully! Saved as: ${finalModelName}`,
-                {
-                    autoClose: 5000,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                    progress: undefined,
-                },
-            );
+            toast.success("Model built successfully.");
 
             // Emit event to trigger stage completion and auto-redirect
             window.dispatchEvent(
@@ -607,8 +870,8 @@ function BuildModel({
         );
 
     return (
-        <div className="w-full h-full overflow-y-auto font-sans text-gray-900">
-            <div className="max-w-7xl mx-auto px-4 py-2">
+        <div className="w-full h-full overflow-y-auto font-sans text-gray-900 matflow-unified-input-height">
+            <div className="w-full px-4 py-2">
                 {type === "function" && (
                     <div className="rounded-xl border border-gray-200 bg-white p-4 md:p-5 shadow-sm mb-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -619,8 +882,11 @@ function BuildModel({
                                 <SingleDropDown
                                     columnNames={allDatasetName}
                                     onValueChange={(e) =>
-                                        handleDatasetChange(e)
+                                        handleDatasetChange(e, {
+                                            fromAuto: false,
+                                        })
                                     }
+                                    initValue={selectedDataset}
                                 />
                             </div>
                             {allRegressor && allRegressor.length > 0 && (

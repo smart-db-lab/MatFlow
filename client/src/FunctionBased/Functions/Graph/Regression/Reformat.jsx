@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../../../../services/api/apiHelpers";
 import {
   Container,
   Typography,
@@ -194,8 +195,10 @@ const Reformat = () => {
     setSuccess(false);
 
     try {
+      const graphBase =
+        `${API_BASE_URL}${import.meta.env.VITE_APP_API_GRAPH || "/api/graph_analysis/"}`;
       const response = await axios.post(
-        `${import.meta.env.VITE_APP_API_GRAPH}/reformat/`,
+        `${graphBase}reformat/`,
         formData,
         {
           headers: {

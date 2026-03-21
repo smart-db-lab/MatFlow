@@ -1,8 +1,12 @@
+import re
+
 from rest_framework import serializers
 from django.core.validators import RegexValidator
-from .models import *
 from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import is_password_usable
 from django.utils.translation import gettext as _
+
+from .models import User, OTP, UserActionToken
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -15,6 +19,8 @@ class UserSerializer(serializers.ModelSerializer):
             'id',
             'email',
             'username',
+            'first_name',
+            'last_name',
             'full_name',
             'password',
             'phone_number',
@@ -44,58 +50,52 @@ class UserSerializer(serializers.ModelSerializer):
         return None
 
     def validate_profile_image(self, value):
-        # Allow broad image support (png/jpg/webp/svg/heic/etc.) while blocking non-image uploads.
         content_type = (getattr(value, "content_type", "") or "").lower()
         if content_type and not content_type.startswith("image/"):
             raise serializers.ValidationError(_("Please upload an image file."))
         return value
     
     def validate_email(self, value):
-        # During updates, allow the same email for the current instance
-        existing = User.objects.filter(email=value)
+        # Email format and uniqueness check
+        if '@' not in value or '.' not in value.split('@')[-1]:
+            raise serializers.ValidationError(_("Invalid email format."))
+        
+        email = value.lower()
+        existing = User.objects.filter(email=email)
         if self.instance:
             existing = existing.exclude(pk=self.instance.pk)
         if existing.exists():
             raise serializers.ValidationError(_("User with this email already exists."))
-        if '@' not in value or '.' not in value.split('@')[-1]:
-            raise serializers.ValidationError(_("Invalid email format. It must contain '@' and a domain (e.g., '.com')."))
-        return value
+        return email
 
     def validate(self, data):
-        email = data.get('email')
         password = data.get('password')
 
-        # For create, require both email and password and enforce uniqueness/format
         if not self.instance:
-            if not email or not password:
-                raise serializers.ValidationError({"email": _("Email and password are required.")})
-
-            if email and ('@' not in email or '.' not in email.split('@')[-1]):
-                raise serializers.ValidationError({"email": _("Invalid email format. It must contain '@' and a domain (e.g., '.com').")})
-
-            if User.objects.filter(email=email).exists():
-                raise serializers.ValidationError({"email": _("User with this email already exists.")})
+            if not data.get('email') or not password:
+                raise serializers.ValidationError({"error": _("Email and password are required.")})
+            if not (data.get('first_name') or '').strip():
+                raise serializers.ValidationError({"first_name": _("First name is required.")})
+            if not (data.get('last_name') or '').strip():
+                raise serializers.ValidationError({"last_name": _("Last name is required.")})
 
         if password:
-            password_errors = []
             if len(password) < 8:
-                password_errors.append(_("Password must be at least 8 characters long."))
-            # if not any(char.isdigit() for char in password):
-            #     password_errors.append("Password must contain at least one numeric character.")
-            # if not any(char.isalpha() for char in password):
-            #     password_errors.append("Password must contain at least one alphabetic character.")
-            # if not any(char in "!@#$%^&*()-_+=<>" for char in password):
-            #     password_errors.append("Password must contain at least one special character.")
-            # if not any(char.isupper() for char in password):
-            #     password_errors.append("Password must contain at least one uppercase letter.")
-
-            if password_errors:
-                raise serializers.ValidationError({"password": password_errors})
+                raise serializers.ValidationError({"password": _("Password must be at least 8 characters long.")})
 
         return data
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
+        first_name = (validated_data.get('first_name') or '').strip()
+        last_name = (validated_data.get('last_name') or '').strip()
+        validated_data['first_name'] = first_name
+        validated_data['last_name'] = last_name
+        validated_data['full_name'] = f"{first_name} {last_name}".strip()
+        if not validated_data.get('username') and validated_data.get('email'):
+            email_local_part = validated_data['email'].split('@')[0]
+            username = re.sub(r'[^a-zA-Z0-9_.-]', '_', email_local_part).strip('._-')[:100]
+            validated_data['username'] = username or 'user'
         user = User(**validated_data)
         if password:
             user.set_password(password)
@@ -104,19 +104,24 @@ class UserSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
-
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-
+        if 'first_name' in validated_data or 'last_name' in validated_data:
+            instance.first_name = (instance.first_name or '').strip()
+            instance.last_name = (instance.last_name or '').strip()
+            instance.full_name = f"{instance.first_name} {instance.last_name}".strip()
+        elif 'full_name' in validated_data and validated_data.get('full_name') and not (
+            validated_data.get('first_name') or validated_data.get('last_name')
+        ):
+            parts = str(validated_data.get('full_name')).strip().split()
+            instance.first_name = parts[0] if parts else ""
+            instance.last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
         if password:
             instance.set_password(password)
-        
         instance.save()
         return instance    
 
 
-
-from django.contrib.auth.hashers import is_password_usable
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
@@ -124,7 +129,7 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get('email')
         password = data.get('password')
-        print(email,password)
+        
         if not email or not password:
             raise serializers.ValidationError({"error": _("Email and password are required.")})
 
@@ -133,7 +138,6 @@ class LoginSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError({"error": _("User with this email does not exist.")})
 
-        # ✅ Ensure password is not NULL or corrupted
         if not is_password_usable(user.password):
             raise serializers.ValidationError({"error": _("Password is corrupted. Please reset your password.")})
 
@@ -147,12 +151,87 @@ class LoginSerializer(serializers.Serializer):
         if not user.is_email_verified:
             raise serializers.ValidationError({"error": _("Email is not verified. Check your email.")})
 
+        login_type = self.context.get("login_type", "user")
+        is_admin = user.is_superuser or user.is_staff
+
+        if login_type == "user" and is_admin:
+            raise serializers.ValidationError({
+                "error": _("No matching user found. Please check your credentials.")
+            })
+
+        if login_type == "admin" and not is_admin:
+            raise serializers.ValidationError({
+                "error": _("You do not have admin access.")
+            })
+
         data['user'] = user
         return data
 
 
+class VerifyOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6)
+    purpose = serializers.ChoiceField(choices=OTP.PURPOSE)
+
+    def validate(self, data):
+        email = (data.get('email') or '').strip().lower()
+        code = (data.get('code') or '').strip()
+        purpose = data.get('purpose')
+
+        if not code.isdigit() or len(code) != 6:
+            raise serializers.ValidationError(_("OTP code must be exactly 6 digits."))
+
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError(_("User with this email does not exist."))
+
+        otp = OTP.objects.filter(
+            user=user,
+            purpose=purpose,
+            is_used=False,
+        ).order_by('-created_at').first()
+        if not otp:
+            raise serializers.ValidationError(_("No active OTP found for this purpose."))
+
+        if otp.is_expired():
+            raise serializers.ValidationError(_("OTP has expired."))
+
+        if otp.is_blocked():
+            raise serializers.ValidationError(_("Too many failed attempts. OTP is blocked."))
+
+        if not otp.check_code(code):
+            otp.attempt_count += 1
+            otp.save()
+            raise serializers.ValidationError(_("Invalid OTP code."))
+
+        data['email'] = email
+        data['user'] = user
+        data['otp'] = otp
+        return data
 
 
+class ResetPasswordWithTokenSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=128)
+    new_password = serializers.CharField(min_length=8, write_only=True)
+    confirm_password = serializers.CharField(min_length=8, write_only=True)
 
-    
-    
+    def validate(self, data):
+        token = data.get('token')
+        new_password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
+
+        if new_password != confirm_password:
+            raise serializers.ValidationError(_("Passwords do not match."))
+
+        try:
+            action_token = UserActionToken.objects.get(token=token, purpose="password_reset", is_used=False)
+        except UserActionToken.DoesNotExist:
+            raise serializers.ValidationError(_("Invalid or expired reset token."))
+
+        if action_token.is_expired():
+            raise serializers.ValidationError(_("Reset token has expired."))
+
+        data['user'] = action_token.user
+        data['action_token'] = action_token
+        return data

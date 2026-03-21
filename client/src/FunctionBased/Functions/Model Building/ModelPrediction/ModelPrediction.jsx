@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
 import { setActiveFunction } from "../../../../Slices/SideBarSlice";
+import { setReRender } from "../../../../Slices/UploadedFileSlice";
 import { setActiveWorkspace } from "../../../../Slices/workspaceSlice";
 import { toast } from "react-toastify";
 import { getAuthHeaders } from "../../../../util/adminAuth";
-import { fetchDataFromIndexedDB } from "../../../../util/indexDB";
 import SingleDropDown from "../../../Components/SingleDropDown/SingleDropDown";
 import AgGridComponent from "../../../Components/AgGridComponent/AgGridComponent";
 import LayoutSelector from "../../../Components/LayoutSelector/LayoutSelector";
@@ -14,8 +14,7 @@ import { Modal } from "../../Feature Engineering/muiCompat";
 import Docs from "../../../../Docs/Docs";
 import { apiService } from "../../../../services/api/apiService";
 import { applyPlotlyTheme } from "../../../../shared/plotlyTheme";
-import { syncSplitAndModelCache } from "../../../../util/modelDatasetSync";
-import { ReadFile, getWorkspaceRootFromPath } from "../../../../util/utils";
+import { getWorkspaceRootFromPath } from "../../../../util/utils";
 import {
     FE_SECTION_TITLE_CLASS,
     FE_SUB_LABEL_CLASS,
@@ -46,23 +45,21 @@ const RESULT_REGRESSOR = [
     "Actual vs. Predicted",
     "Residuals vs. Predicted",
     "Histogram of Residuals",
-    "QQ Plot",
+    "Quantile-Quantile (Q-Q) Plot",
     "Box Plot of Residuals",
 ];
 
 function ModelPrediction({ csvData }) {
     const dispatch = useDispatch();
     const { projectId } = useParams();
-    const splitDbName = projectId
-        ? `splitted_dataset:${projectId}`
-        : "splitted_dataset";
-    const modelsDbName = projectId ? `models:${projectId}` : "models";
     const activeWorkspaceId = useSelector(
         (state) => state.workspace?.activeWorkspaceId,
     );
+    const rerender = useSelector((state) => state.uploadedFile.rerender);
     const [selectDataset, setSelectDataset] = useState();
     const [allDataset, setAllDataset] = useState();
     const [allModels, setAllModels] = useState();
+    const [datasetModelOrderMap, setDatasetModelOrderMap] = useState({});
     const [select_data, setSelectData] = useState();
     const [target_variable, setTargetVariable] = useState("Vertical");
     const [select_model, setSelectModel] = useState();
@@ -73,84 +70,222 @@ function ModelPrediction({ csvData }) {
     const [loading, setLoading] = useState(false);
     const [type, setType] = useState();
     const [selectedSplitMeta, setSelectedSplitMeta] = useState(null);
+    const [datasetMetaMap, setDatasetMetaMap] = useState({});
+    const hasUserSelectedDatasetRef = useRef(false);
+    const hasUserSelectedModelRef = useRef(false);
 
     const [visible, setVisible] = useState(false);
 
     const openModal = () => setVisible(true);
     const closeModal = () => setVisible(false);
-    const sanitizeNamePart = (value) => {
-        return String(value || "unknown")
+    const isCategoricalType = (modelType) => {
+        const normalized = String(modelType || "")
             .trim()
-            .replace(/\s+/g, "_")
-            .replace(/[^a-zA-Z0-9_-]/g, "_")
-            .replace(/_+/g, "_")
-            .replace(/^_+|_+$/g, "")
             .toLowerCase();
+        return (
+            normalized === "categorical" ||
+            normalized === "classifier" ||
+            normalized === "classification"
+        );
     };
+    const getFriendlyPredictionError = (rawError) => {
+        const text =
+            typeof rawError === "string"
+                ? rawError
+                : JSON.stringify(rawError || "");
+        const normalized = text.toLowerCase();
 
-    const getPredictionRows = (predictionResponse) => {
-        const table = predictionResponse?.table;
-        if (!table) return null;
-        if (Array.isArray(table)) return table;
-        if (typeof table === "string") {
+        if (normalized.includes("could not convert string to float")) {
+            return "Prediction failed. Non-numeric values found (e.g., Iris-versicolor). Encode categorical columns first.";
+        }
+        return "Prediction failed. Please check input data and try again.";
+    };
+    const parseJsonSafe = (value, fallback = null) => {
+        if (value === null || value === undefined) return fallback;
+        if (typeof value === "string") {
             try {
-                const parsed = JSON.parse(table);
-                return Array.isArray(parsed) ? parsed : null;
+                return JSON.parse(value);
             } catch {
-                return null;
+                return fallback;
             }
         }
-        return null;
+        return value;
     };
+    const normalizeResultForApi = (selectedResult, modelType) => {
+        if (isCategoricalType(modelType)) return selectedResult;
+        const map = {
+            "R-Squared": "R2 Score",
+            "Mean Absolute Error": "MAE",
+            "Mean Squared Error": "MSE",
+            "Root Mean Squared Error": "RMSE",
+            "Quantile-Quantile (Q-Q) Plot": "QQ Plot",
+        };
+        return map[selectedResult] || selectedResult;
+    };
+    const parseClassificationReport = (reportText) => {
+        if (typeof reportText !== "string" || !reportText.trim()) return null;
 
-    const saveChartOutput = async (predictionResponse) => {
-        if (!projectId || !predictionResponse?.graph) return;
-        try {
-            const workspaceRoot = getWorkspaceRootFromPath(
-                selectedSplitMeta?.[5] || "",
-            );
-            if (!workspaceRoot) {
-                throw new Error(
-                    "Workspace context missing for chart persistence.",
-                );
+        const lines = reportText
+            .split("\n")
+            .map((line) => line.trimEnd())
+            .filter((line) => line.trim().length > 0);
+
+        const classRows = [];
+        const summaryRows = [];
+        let accuracy = null;
+
+        const rowRegex =
+            /^(.+?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/;
+        const accuracyRegex =
+            /^accuracy\s+(-?\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/;
+
+        lines.forEach((rawLine) => {
+            const line = rawLine.trim();
+            if (
+                line.toLowerCase().includes("precision") &&
+                line.toLowerCase().includes("recall")
+            ) {
+                return;
             }
-            const chartOutputFolder = `${workspaceRoot}/output/charts`;
-            const timestamp = Date.now();
-            const datasetPart = sanitizeNamePart(selectDataset);
-            const modelPart = sanitizeNamePart(select_model);
-            const resultPart = sanitizeNamePart(result || "chart");
-            const graphPayload =
-                typeof predictionResponse.graph === "string"
-                    ? predictionResponse.graph
-                    : JSON.stringify(predictionResponse.graph, null, 2);
 
-            const graphFileName = `${timestamp}__${datasetPart}_${modelPart}_${resultPart}.json`;
-            const graphBlob = new Blob([graphPayload], {
-                type: "application/json",
-            });
-            const graphFile = new File([graphBlob], graphFileName, {
-                type: "application/json",
-            });
+            const acc = line.match(accuracyRegex);
+            if (acc) {
+                accuracy = {
+                    score: Number(acc[1]),
+                    support: Number(acc[2]),
+                };
+                return;
+            }
 
-            const formData = new FormData();
-            formData.append("project_id", projectId);
-            formData.append("folder", chartOutputFolder);
-            formData.append("file", graphFile);
-            await apiService.matflow.dataset.uploadFile(formData);
+            const match = line.match(rowRegex);
+            if (!match) return;
 
-            toast.success(`Prediction chart saved: "${graphFileName}".`);
-        } catch (chartSaveError) {
-            toast.warning(
-                `Prediction completed, but chart save failed.${chartSaveError?.message ? ` ${chartSaveError.message}` : ""}`,
+            const label = match[1].trim();
+            const row = {
+                label,
+                precision: Number(match[2]),
+                recall: Number(match[3]),
+                f1Score: Number(match[4]),
+                support: Number(match[5]),
+            };
+
+            if (label === "macro avg" || label === "weighted avg") {
+                summaryRows.push(row);
+            } else {
+                classRows.push(row);
+            }
+        });
+
+        if (!classRows.length && !summaryRows.length && !accuracy) return null;
+        return { classRows, summaryRows, accuracy };
+    };
+    const extractWorkspaceIdFromPath = (pathValue = "") => {
+        const normalized = String(pathValue || "");
+        const match = normalized.match(
+            /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i,
+        );
+        return match ? match[0] : "";
+    };
+    const persistPredictionDatasetOnDownload = async (rows, fileName) => {
+        if (!projectId || !Array.isArray(rows) || rows.length === 0) return;
+        try {
+            const resolvedWorkspaceId =
+                activeWorkspaceId ||
+                extractWorkspaceIdFromPath(modelData?.workspace_model_file) ||
+                extractWorkspaceIdFromPath(
+                    modelData?.workspace_metadata_file,
+                ) ||
+                extractWorkspaceIdFromPath(modelData?.split_folder) ||
+                extractWorkspaceIdFromPath(selectedSplitMeta?.[5]);
+
+            const workspaceRoot = getWorkspaceRootFromPath(
+                modelData?.split_folder || selectedSplitMeta?.[5] || "",
             );
+            const targetFolder = resolvedWorkspaceId
+                ? "output/generated_datasets"
+                : `${workspaceRoot}/output/generated_datasets`;
+
+            if (!resolvedWorkspaceId && !workspaceRoot) {
+                toast.warning("Select a dataset first.");
+                return;
+            }
+            await apiService.matflow.dataset.createFile(
+                projectId,
+                rows,
+                fileName,
+                targetFolder,
+                resolvedWorkspaceId,
+            );
+            dispatch(setReRender(!rerender));
+            toast.success("Dataset saved successfully.");
+        } catch (err) {
+            toast.error(err?.message || "Failed to save dataset.");
         }
     };
 
     useEffect(() => {
         const fetchData = async () => {
-            const synced = await syncSplitAndModelCache(projectId);
-            setAllDataset(synced.splitNames || []);
-            setAllModels(synced.modelEntries || []);
+            const serverRegistry = await apiService.matflow.ml
+                .listModelsRegistry(projectId)
+                .catch(() => null);
+            const rows = Array.isArray(serverRegistry?.models)
+                ? serverRegistry.models
+                : [];
+            const orderedRows = [...rows].sort(
+                (a, b) =>
+                    new Date(b?.updated_at || 0).getTime() -
+                    new Date(a?.updated_at || 0).getTime(),
+            );
+            const groupedModels = {};
+            const groupedMeta = {};
+            const datasetOrder = [];
+            const modelOrderByDataset = {};
+            const seenModelByDataset = {};
+
+            orderedRows.forEach((row) => {
+                const datasetName = String(row?.dataset_name || "").trim();
+                const modelName = String(row?.model_name || "").trim();
+                if (!datasetName || !modelName) return;
+
+                if (!groupedModels[datasetName]) {
+                    groupedModels[datasetName] = {};
+                    datasetOrder.push(datasetName);
+                    modelOrderByDataset[datasetName] = [];
+                    seenModelByDataset[datasetName] = new Set();
+                }
+                if (!seenModelByDataset[datasetName].has(modelName)) {
+                    seenModelByDataset[datasetName].add(modelName);
+                    modelOrderByDataset[datasetName].push(modelName);
+                }
+                groupedModels[datasetName][modelName] = {
+                    id: row?.id || "",
+                    metrics: row?.metrics || {},
+                    metrics_table: row?.metrics_table || {},
+                    y_pred: row?.y_pred || [],
+                    type: row?.model_type || "",
+                    regressor: row?.algorithm || "",
+                    split_folder: row?.split_folder || "",
+                    workspace_model_file: row?.model_file || "",
+                    workspace_metadata_file: row?.metadata_file || "",
+                };
+
+                if (!groupedMeta[datasetName]) {
+                    const rawType = String(row?.model_type || "").toLowerCase();
+                    groupedMeta[datasetName] = [
+                        rawType === "classifier" ? "Categorical" : "Continuous",
+                        row?.train_filename || "",
+                        row?.test_filename || "",
+                        row?.target_var || "",
+                        row?.test_filename || "",
+                        row?.split_folder || "",
+                    ];
+                }
+            });
+
+            setAllDataset(datasetOrder);
+            setAllModels(groupedModels);
+            setDatasetModelOrderMap(modelOrderByDataset);
+            setDatasetMetaMap(groupedMeta);
         };
 
         fetchData();
@@ -161,19 +296,49 @@ function ModelPrediction({ csvData }) {
         else setResult(RESULT_REGRESSOR[0]);
     }, [type]);
 
-    const handleSelectDataset = async (e) => {
+    useEffect(() => {
+        if (!Array.isArray(allDataset) || allDataset.length === 0) return;
+        const hasValidDataset =
+            !!selectDataset && allDataset.includes(selectDataset);
+        if (hasUserSelectedDatasetRef.current && hasValidDataset) return;
+
+        const nextDataset = hasValidDataset ? selectDataset : allDataset[0];
+        if (nextDataset && nextDataset !== selectDataset) {
+            handleSelectDataset(nextDataset, { fromAuto: true });
+        }
+    }, [
+        allDataset,
+        allModels,
+        datasetMetaMap,
+        datasetModelOrderMap,
+        selectDataset,
+    ]);
+
+    useEffect(() => {
+        if (!selectDataset) return;
+        const orderedModels = datasetModelOrderMap?.[selectDataset] || [];
+        if (!Array.isArray(orderedModels) || orderedModels.length === 0) return;
+
+        const hasValidModel =
+            !!select_model && orderedModels.includes(select_model);
+        if (hasUserSelectedModelRef.current && hasValidModel) return;
+
+        const nextModel = hasValidModel ? select_model : orderedModels[0];
+        if (nextModel && nextModel !== select_model) {
+            handleModelChange(nextModel, { fromAuto: true });
+        }
+    }, [allModels, datasetModelOrderMap, selectDataset, select_model]);
+
+    const handleSelectDataset = async (e, options = {}) => {
+        const { fromAuto = false } = options;
+        hasUserSelectedDatasetRef.current = !fromAuto;
+        hasUserSelectedModelRef.current = false;
         setData();
         setSelectDataset(e);
         setSelectModel(undefined);
         setModelData(undefined);
 
-        let temp = (allModels || []).map((val) => {
-            if (Object.keys(val)[0] === e) {
-                return val[e];
-            }
-            return undefined;
-        });
-        temp = temp.filter((val) => val !== undefined && val !== null)[0];
+        const temp = allModels?.[e];
         if (!temp || typeof temp !== "object") {
             setCurrentModels([]);
             setType(undefined);
@@ -182,19 +347,8 @@ function ModelPrediction({ csvData }) {
             return;
         }
 
-        setCurrentModels(Object.keys(temp));
-        let tempDatasets = await fetchDataFromIndexedDB(splitDbName).catch(
-            () => [],
-        );
-        tempDatasets = (tempDatasets || []).map((val) => {
-            if (Object.keys(val)[0] === e) {
-                return val[e];
-            }
-            return undefined;
-        });
-        tempDatasets = tempDatasets.filter(
-            (val) => val !== undefined && val !== null,
-        )[0];
+        setCurrentModels(datasetModelOrderMap?.[e] || Object.keys(temp));
+        const tempDatasets = datasetMetaMap?.[e];
         if (!tempDatasets || !Array.isArray(tempDatasets)) {
             setType(undefined);
             setSelectData(undefined);
@@ -216,60 +370,68 @@ function ModelPrediction({ csvData }) {
         // No longer stored in split metadata to avoid null values
     };
 
-    const handleModelChange = async (e) => {
+    const handleModelChange = async (e, options = {}) => {
+        const { fromAuto = false } = options;
+        hasUserSelectedModelRef.current = !fromAuto;
         setData();
         setSelectModel(e);
-        let res = await fetchDataFromIndexedDB(modelsDbName).catch(() => []);
-
-        res = (res || []).map((val) => val[selectDataset]);
-        const modelGroup = res.filter(
-            (val) => val !== undefined && val !== null,
-        )[0];
+        const modelGroup = allModels?.[selectDataset];
         if (!modelGroup || !modelGroup[e]) {
             setModelData(undefined);
             return;
         }
-        res = modelGroup[e];
+        const res = modelGroup[e];
 
         setModelData(res);
+        // Prefer model metadata type when available.
+        if (res?.type) {
+            setType(isCategoricalType(res.type) ? "Categorical" : "Continuous");
+        }
     };
 
     const handleSave = async () => {
         try {
             if (!modelData || !modelData.metrics) {
-                toast.error("Please select a valid dataset and model first.");
+                toast.error("Select dataset and model first.");
                 return;
             }
             if (!selectedSplitMeta || !Array.isArray(selectedSplitMeta)) {
-                toast.error(
-                    "Dataset metadata missing. Please reselect dataset.",
-                );
+                toast.error("Dataset metadata missing.");
                 return;
             }
 
             setLoading(true);
 
-            // Get workspace_id and filename from Redux (populated during dataset selection)
-            const reduxWorkspaceId = activeWorkspaceId;
+            // Resolve workspace_id from Redux first, then model/split metadata fallback.
+            const resolvedWorkspaceId =
+                activeWorkspaceId ||
+                extractWorkspaceIdFromPath(modelData?.workspace_model_file) ||
+                extractWorkspaceIdFromPath(
+                    modelData?.workspace_metadata_file,
+                ) ||
+                extractWorkspaceIdFromPath(modelData?.split_folder) ||
+                extractWorkspaceIdFromPath(selectedSplitMeta?.[5]);
             const testFilename = selectedSplitMeta?.[2];
 
             console.log(
-                "[handleSave] Redux activeWorkspaceId:",
-                reduxWorkspaceId,
+                "[handleSave] Resolved workspaceId:",
+                resolvedWorkspaceId,
             );
             console.log("[handleSave] selectedSplitMeta:", selectedSplitMeta);
             console.log("[handleSave] testFilename:", testFilename);
 
-            if (!reduxWorkspaceId) {
-                console.error("[handleSave] Workspace ID missing from Redux");
-                toast.error("Workspace ID not found. Please reselect dataset.");
+            if (!resolvedWorkspaceId) {
+                console.error(
+                    "[handleSave] Workspace ID missing from Redux and metadata",
+                );
+                toast.error("Workspace context missing.");
                 setLoading(false);
                 return;
             }
 
             if (!testFilename) {
                 console.error("[handleSave] Test filename missing");
-                toast.error("Test dataset filename missing from metadata.");
+                toast.error("Dataset file missing.");
                 setLoading(false);
                 return;
             }
@@ -277,84 +439,57 @@ function ModelPrediction({ csvData }) {
             // Filename already includes extension from SplitDataset
             const filenameWithExt = testFilename;
 
+            // Keep Redux workspace context in sync if we recovered it from metadata.
+            if (!activeWorkspaceId && resolvedWorkspaceId) {
+                dispatch(
+                    setActiveWorkspace({
+                        workspaceId: resolvedWorkspaceId,
+                        filename: filenameWithExt || null,
+                    }),
+                );
+            }
+
             console.log("[handleSave] Sending API request:", {
-                workspace_id: reduxWorkspaceId,
+                workspace_id: resolvedWorkspaceId,
                 filename: filenameWithExt,
                 type: modelData.type,
             });
 
+            const resultForApi = normalizeResultForApi(result, type);
             const Data = await apiService.matflow.ml.predictModel({
+                model_id: modelData?.id || undefined,
+                project_id: projectId,
                 "Target Variable": target_variable,
                 model: modelData.metrics_table,
                 filename: filenameWithExt,
-                workspace_id: reduxWorkspaceId,
-                Result: result,
+                workspace_id: resolvedWorkspaceId,
+                Result: resultForApi,
                 y_pred: modelData.y_pred,
                 type: modelData.type,
                 regressor: modelData.regressor,
             });
 
-            setData(Data);
+            const normalizedData =
+                Data &&
+                typeof Data === "object" &&
+                Data !== null &&
+                Object.prototype.hasOwnProperty.call(Data, "value") &&
+                !Object.prototype.hasOwnProperty.call(Data, "graph") &&
+                !Object.prototype.hasOwnProperty.call(Data, "table")
+                    ? Data.value
+                    : Data;
 
-            if (Data.error) {
-                toast.error(JSON.stringify(Data.error), {
-                    autoClose: 5000,
-                    hideProgressBar: false,
-                    closeOnClick: true,
-                    pauseOnHover: true,
-                    draggable: true,
-                    progress: undefined,
-                });
+            setData(normalizedData);
+
+            if (normalizedData?.error) {
+                toast.error(getFriendlyPredictionError(normalizedData.error));
                 setData();
             }
 
-            // Auto-save prediction dataset (rows + Actual/Predicted) into project files
-            if (projectId) {
-                const predictionRows = getPredictionRows(Data);
-                if (
-                    Array.isArray(predictionRows) &&
-                    predictionRows.length > 0 &&
-                    Object.prototype.hasOwnProperty.call(
-                        predictionRows[0],
-                        "Actual",
-                    ) &&
-                    Object.prototype.hasOwnProperty.call(
-                        predictionRows[0],
-                        "Predicted",
-                    )
-                ) {
-                    const workspaceRoot = getWorkspaceRootFromPath(
-                        selectedSplitMeta?.[5] || "",
-                    );
-                    if (!workspaceRoot) {
-                        throw new Error(
-                            "Workspace context missing for prediction persistence.",
-                        );
-                    }
-                    const predictionOutputFolder = `${workspaceRoot}/output/generated_datasets`;
-                    const timestamp = Date.now();
-                    const datasetPart = sanitizeNamePart(selectDataset);
-                    const modelPart = sanitizeNamePart(select_model);
-                    const fileName = `${timestamp}__${datasetPart}_${modelPart}`;
-                    await apiService.matflow.dataset.createFile(
-                        projectId,
-                        predictionRows,
-                        fileName,
-                        predictionOutputFolder,
-                    );
-                    toast.success(
-                        `Prediction dataset saved: "${fileName}.csv".`,
-                    );
-                }
-                await saveChartOutput(Data);
-            }
             setLoading(false);
         } catch (error) {
             setLoading(false);
-            toast.error(
-                error?.message ||
-                    "Prediction failed. Please reselect dataset/model and retry.",
-            );
+            toast.error(getFriendlyPredictionError(error?.message || error));
         }
     };
 
@@ -384,7 +519,7 @@ function ModelPrediction({ csvData }) {
                 </div>
             </div>
         );
-    if (!allModels || allModels.length === 0)
+    if (!allModels || Object.keys(allModels).length === 0)
         return (
             <div className="flex flex-col items-center justify-center h-64 gap-3">
                 <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center">
@@ -416,7 +551,10 @@ function ModelPrediction({ csvData }) {
         const normalizedTitle = String(title || "")
             .trim()
             .toLowerCase();
-        if (normalizedTitle === "actual vs. predicted") {
+        if (
+            normalizedTitle === "actual vs. predicted" ||
+            normalizedTitle === "model predicted result"
+        ) {
             return `actualvspredicted_${Date.now()}.csv`;
         }
         const safe = String(title || "table")
@@ -429,8 +567,15 @@ function ModelPrediction({ csvData }) {
 
     const renderTableCard = (title, rowData, colKeys) => (
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm">
-            <div className="px-5 py-3.5 border-b border-gray-100">
-                <h3 className={FE_SECTION_TITLE_CLASS}>{title}</h3>
+            <div className="px-5 py-3.5 border-b border-[#99f6e4] bg-[#f0fdfa] flex items-center justify-between gap-3">
+                <h3
+                    className={`${FE_SECTION_TITLE_CLASS} !mb-0 text-[#115e59]`}
+                >
+                    {title}
+                </h3>
+                <span className="inline-flex items-center rounded-full border border-[#99f6e4] bg-white px-2.5 py-0.5 text-xs font-semibold text-[#0f766e]">
+                    Table
+                </span>
             </div>
             <div className="p-4">
                 <AgGridComponent
@@ -444,35 +589,67 @@ function ModelPrediction({ csvData }) {
                     height={450}
                     download={true}
                     downloadFileName={getDownloadFileName(title)}
+                    onDownload={({ fileName, rows }) =>
+                        persistPredictionDatasetOnDownload(rows, fileName)
+                    }
                 />
             </div>
         </div>
     );
 
     // Helper to render a graph card
-    const renderGraphCard = (title, graphJson) => {
-        const parsed =
-            typeof graphJson === "string" ? JSON.parse(graphJson) : graphJson;
+    const renderGraphCard = (_title, graphJson) => {
+        const parsed = parseJsonSafe(graphJson);
+        if (!parsed) return null;
 
         // Check if it's an array with ECharts format (new backend returns array of options)
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.xAxis) {
-            return (
-                <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3.5 border-b border-gray-100">
-                        <h3 className={FE_SECTION_TITLE_CLASS}>{title}</h3>
+        // ECharts format has 'series', 'xAxis'/'yAxis', 'polar', 'gauge' or other ECharts-specific properties
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            const firstOption = parsed[0];
+            const isECharts =
+                firstOption?.series ||
+                firstOption?.xAxis ||
+                firstOption?.yAxis ||
+                firstOption?.polar ||
+                firstOption?.gauge ||
+                firstOption?.grid;
+
+            if (isECharts) {
+                return (
+                    <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
+                        <div className="px-5 py-3.5 border-b border-[#bfdbfe] bg-[#eff6ff] flex items-center justify-between gap-3">
+                            <h3
+                                className={`${FE_SECTION_TITLE_CLASS} !mb-0 text-[#115e59]`}
+                            >
+                                Graph Visualization
+                            </h3>
+                            <span className="inline-flex items-center rounded-full border border-[#99f6e4] bg-white px-2.5 py-0.5 text-xs font-semibold text-[#0f766e]">
+                                Graph
+                            </span>
+                        </div>
+                        <div className="p-4">
+                            <LayoutSelector
+                                echartsData={parsed}
+                                projectId={projectId}
+                            />
+                        </div>
                     </div>
-                    <div className="p-4">
-                        <LayoutSelector echartsData={parsed} />
-                    </div>
-                </div>
-            );
+                );
+            }
         }
 
         // Otherwise it's Plotly format
         return (
             <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-gray-100">
-                    <h3 className={FE_SECTION_TITLE_CLASS}>{title}</h3>
+                <div className="px-5 py-3.5 border-b border-[#99f6e4] bg-[#ecfeff] flex items-center justify-between gap-3">
+                    <h3
+                        className={`${FE_SECTION_TITLE_CLASS} !mb-0 text-[#115e59]`}
+                    >
+                        Graph Visualization
+                    </h3>
+                    <span className="inline-flex items-center rounded-full border border-[#99f6e4] bg-white px-2.5 py-0.5 text-xs font-semibold text-[#0f766e]">
+                        Graph
+                    </span>
                 </div>
                 <div className="p-4">
                     <Plot
@@ -512,13 +689,21 @@ function ModelPrediction({ csvData }) {
         "Regression Line Plot",
         "Residuals vs. Predicted",
         "Histogram of Residuals",
+        "Quantile-Quantile (Q-Q) Plot",
         "QQ Plot",
         "Box Plot of Residuals",
         "Metrics Summary",
     ];
+    const parsedTableData = Array.isArray(data?.table)
+        ? data.table
+        : parseJsonSafe(data?.table, []);
+    const parsedTableCols =
+        Array.isArray(parsedTableData) && parsedTableData.length > 0
+            ? Object.keys(parsedTableData[0] || {})
+            : [];
 
     return (
-        <div className="w-full h-full flex flex-col gap-4">
+        <div className="w-full h-full flex flex-col gap-4 matflow-unified-input-height">
             <div className="flex-1 flex gap-5">
                 {/* ── Left Panel: Controls ── */}
                 <div className="w-[340px] min-w-[300px] max-w-[400px]">
@@ -538,8 +723,11 @@ function ModelPrediction({ csvData }) {
                                 <SingleDropDown
                                     columnNames={allDataset}
                                     onValueChange={(e) =>
-                                        handleSelectDataset(e)
+                                        handleSelectDataset(e, {
+                                            fromAuto: false,
+                                        })
                                     }
+                                    initValue={selectDataset}
                                 />
                             </div>
                             <div>
@@ -548,7 +736,12 @@ function ModelPrediction({ csvData }) {
                                 </label>
                                 <SingleDropDown
                                     columnNames={currentModels || []}
-                                    onValueChange={(e) => handleModelChange(e)}
+                                    onValueChange={(e) =>
+                                        handleModelChange(e, {
+                                            fromAuto: false,
+                                        })
+                                    }
+                                    initValue={select_model}
                                 />
                             </div>
                             <div>
@@ -581,7 +774,7 @@ function ModelPrediction({ csvData }) {
                                 </label>
                                 <SingleDropDown
                                     columnNames={
-                                        type === "Categorical"
+                                        isCategoricalType(type)
                                             ? RESULT_CLASSIFIER
                                             : RESULT_REGRESSOR
                                     }
@@ -697,7 +890,7 @@ function ModelPrediction({ csvData }) {
                                         data.graph && (
                                             <>
                                                 {renderTableCard(
-                                                    "Actual vs. Predicted",
+                                                    "Model Predicted Result",
                                                     data.table,
                                                     Object.keys(data.table[0]),
                                                 )}
@@ -716,7 +909,7 @@ function ModelPrediction({ csvData }) {
                                         data.graph && (
                                             <>
                                                 {renderTableCard(
-                                                    "Actual vs. Predicted",
+                                                    "Model Predicted Result",
                                                     data.table,
                                                     Object.keys(data.table[0]),
                                                 )}
@@ -750,9 +943,171 @@ function ModelPrediction({ csvData }) {
                                                     </h3>
                                                 </div>
                                                 <div className="p-5">
-                                                    <pre className="text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap font-mono bg-gray-50/80 p-4 rounded-lg border border-gray-100">
-                                                        {data}
-                                                    </pre>
+                                                    {(() => {
+                                                        const parsed =
+                                                            parseClassificationReport(
+                                                                data,
+                                                            );
+                                                        if (!parsed) {
+                                                            return (
+                                                                <pre className="text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap font-mono bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                                                    {data}
+                                                                </pre>
+                                                            );
+                                                        }
+
+                                                        const {
+                                                            classRows,
+                                                            summaryRows,
+                                                            accuracy,
+                                                        } = parsed;
+
+                                                        return (
+                                                            <div className="space-y-4">
+                                                                {accuracy && (
+                                                                    <div className="bg-primary/10 border border-primary/20 rounded-lg px-4 py-2.5 flex items-center justify-between">
+                                                                        <span className="text-sm font-medium text-gray-700">
+                                                                            Accuracy
+                                                                        </span>
+                                                                        <span className="text-sm font-semibold text-primary-dark">
+                                                                            {accuracy.score.toFixed(
+                                                                                3,
+                                                                            )}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="overflow-x-auto rounded-lg border border-gray-100">
+                                                                    <table className="w-full min-w-[640px]">
+                                                                        <thead>
+                                                                            <tr className="bg-teal-50/70">
+                                                                                <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                    Class
+                                                                                </th>
+                                                                                <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                    Precision
+                                                                                </th>
+                                                                                <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                    Recall
+                                                                                </th>
+                                                                                <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                    F1-Score
+                                                                                </th>
+                                                                                <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                    Support
+                                                                                </th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {classRows.map(
+                                                                                (
+                                                                                    row,
+                                                                                    idx,
+                                                                                ) => (
+                                                                                    <tr
+                                                                                        key={`${row.label}-${idx}`}
+                                                                                        className="border-t border-gray-100"
+                                                                                    >
+                                                                                        <td className="px-4 py-2.5 text-sm text-gray-800 font-medium">
+                                                                                            {
+                                                                                                row.label
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                            {row.precision.toFixed(
+                                                                                                3,
+                                                                                            )}
+                                                                                        </td>
+                                                                                        <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                            {row.recall.toFixed(
+                                                                                                3,
+                                                                                            )}
+                                                                                        </td>
+                                                                                        <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                            {row.f1Score.toFixed(
+                                                                                                3,
+                                                                                            )}
+                                                                                        </td>
+                                                                                        <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                            {
+                                                                                                row.support
+                                                                                            }
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ),
+                                                                            )}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+
+                                                                {summaryRows.length >
+                                                                    0 && (
+                                                                    <div className="overflow-x-auto rounded-lg border border-gray-100">
+                                                                        <table className="w-full min-w-[640px]">
+                                                                            <thead>
+                                                                                <tr className="bg-teal-50/70">
+                                                                                    <th className="px-4 py-3 text-left text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                        Summary
+                                                                                    </th>
+                                                                                    <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                        Precision
+                                                                                    </th>
+                                                                                    <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                        Recall
+                                                                                    </th>
+                                                                                    <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                        F1-Score
+                                                                                    </th>
+                                                                                    <th className="px-4 py-3 text-right text-xs uppercase tracking-wide text-gray-800 font-bold border-b border-teal-200">
+                                                                                        Support
+                                                                                    </th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {summaryRows.map(
+                                                                                    (
+                                                                                        row,
+                                                                                        idx,
+                                                                                    ) => (
+                                                                                        <tr
+                                                                                            key={`${row.label}-summary-${idx}`}
+                                                                                            className="border-t border-gray-100 bg-gray-50/60"
+                                                                                        >
+                                                                                            <td className="px-4 py-2.5 text-sm text-gray-800 font-semibold">
+                                                                                                {
+                                                                                                    row.label
+                                                                                                }
+                                                                                            </td>
+                                                                                            <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                                {row.precision.toFixed(
+                                                                                                    3,
+                                                                                                )}
+                                                                                            </td>
+                                                                                            <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                                {row.recall.toFixed(
+                                                                                                    3,
+                                                                                                )}
+                                                                                            </td>
+                                                                                            <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                                {row.f1Score.toFixed(
+                                                                                                    3,
+                                                                                                )}
+                                                                                            </td>
+                                                                                            <td className="px-4 py-2.5 text-sm text-right text-gray-700 font-mono">
+                                                                                                {
+                                                                                                    row.support
+                                                                                                }
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    ),
+                                                                                )}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         )}
@@ -769,16 +1124,13 @@ function ModelPrediction({ csvData }) {
                                     {/* Regressor Target Value: table + graph */}
                                     {result === "Target Value" &&
                                         data.table &&
-                                        data.graph && (
+                                        data.graph &&
+                                        parsedTableCols.length > 0 && (
                                             <>
                                                 {renderTableCard(
-                                                    "Actual vs. Predicted",
-                                                    JSON.parse(data.table),
-                                                    Object.keys(
-                                                        JSON.parse(
-                                                            data.table,
-                                                        )[0],
-                                                    ),
+                                                    "Model Predicted Result",
+                                                    parsedTableData,
+                                                    parsedTableCols,
                                                 )}
                                                 <div className="mt-1">
                                                     {renderGraphCard(
@@ -792,16 +1144,13 @@ function ModelPrediction({ csvData }) {
                                     {/* Actual vs. Predicted: table + download + graph */}
                                     {result === "Actual vs. Predicted" &&
                                         data.table &&
-                                        data.graph && (
+                                        data.graph &&
+                                        parsedTableCols.length > 0 && (
                                             <>
                                                 {renderTableCard(
-                                                    "Actual vs. Predicted",
-                                                    JSON.parse(data.table),
-                                                    Object.keys(
-                                                        JSON.parse(
-                                                            data.table,
-                                                        )[0],
-                                                    ),
+                                                    "Model Predicted Result",
+                                                    parsedTableData,
+                                                    parsedTableCols,
                                                 )}
                                                 <div className="mt-1">
                                                     {renderGraphCard(

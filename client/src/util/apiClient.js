@@ -12,6 +12,16 @@ import { isGuestMode, getGuestSessionId } from './guestSession';
 
 /** Event name dispatched when server is unreachable and tokens were cleared */
 export const AUTH_SERVER_DOWN_EVENT = 'auth:server-down';
+let refreshPromise = null;
+
+const waitForOngoingRefresh = async () => {
+  if (!refreshPromise) return;
+  try {
+    await refreshPromise;
+  } catch (_) {
+    // Ignore refresh errors here; downstream request flow handles auth failures.
+  }
+};
 
 /**
  * Check if an error is a network/server-unreachable error (e.g. connection refused)
@@ -52,37 +62,22 @@ const getCsrfToken = () => {
  */
 const fetchCsrfToken = async () => {
   try {
-    // Skip CSRF fetch if user is not authenticated or is a guest — JWT auth doesn't
-    // need CSRF and hitting auth-required endpoints without a token just causes 401 errors.
+    // Skip CSRF bootstrap for guest mode.
     if (!getAccessToken() || isGuestMode()) {
       return null;
     }
 
-    const base = (import.meta.env.VITE_APP_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
-    const endpoints = [
-      `${base}/api/auth/users/me/`,
-    ];
-    
-    const authHeaders = getAuthHeaders();
-    for (const endpoint of endpoints) {
-      try {
-        const response = await fetch(endpoint, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            ...authHeaders,
-          },
-        });
-        
-        // Check if cookie was set
-        const token = getCsrfToken();
-        if (token) {
-          return token;
-        }
-      } catch (err) {
-        // Continue to next endpoint
-        continue;
-      }
+    const base = (import.meta.env.VITE_APP_API_URL || "").replace(/\/+$/, "");
+    const endpoint = `${base}/api/csrf/`;
+    await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    // Check if cookie was set
+    const token = getCsrfToken();
+    if (token) {
+      return token;
     }
     
     return null;
@@ -101,11 +96,17 @@ const fetchCsrfToken = async () => {
 export const apiFetch = async (url, options = {}) => {
   // Check if body is FormData
   const isFormData = options.body instanceof FormData;
-  
+
+  // If another request is currently refreshing, wait for it first so this request
+  // can use the newest token and avoid an expected transient 401.
+  const guestActive = isGuestMode();
+  if (!guestActive && getAccessToken() && refreshPromise) {
+    await waitForOngoingRefresh();
+  }
+
   // Build headers - don't set Content-Type for FormData (browser will set it with boundary)
   // In guest mode, NEVER send auth headers — even if stale tokens somehow remain in
   // localStorage, sending an expired JWT causes DRF to return 401 before AllowAny runs.
-  const guestActive = isGuestMode();
   const authHeaders = guestActive ? {} : getAuthHeaders();
   const headers = {
     ...authHeaders,
@@ -148,7 +149,13 @@ export const apiFetch = async (url, options = {}) => {
     // If we get a 401 and we actually sent an auth token, try to refresh and retry.
     // Skip refresh logic entirely for guest/unauthenticated requests.
     if (response.status === 401 && !guestActive && getAccessToken()) {
-      const refreshed = await refreshAccessToken();
+      // Single-flight refresh: avoid parallel refresh calls racing each other.
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
+      }
+      const refreshed = await refreshPromise;
 
       if (refreshed) {
         // Retry the request with the new token

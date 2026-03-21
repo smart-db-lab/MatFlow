@@ -38,4 +38,8 @@ else:
 
 print(f"\nEmail: admin@mail.com")
 print(f"Password: 12345678")
-print(f"\nYou can now login at: http://localhost:8000/admin/")
+backend_url = os.getenv("BACKEND_URL", "").rstrip("/")
+if backend_url:
+    print(f"\nYou can now login at: {backend_url}/admin/")
+else:
+    print("\nYou can now login at: /admin/")

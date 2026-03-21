@@ -241,17 +241,17 @@ python manage.py migrate
 Run the Django development server:
 
 ```bash
-python manage.py runserver
+python manage.py runserver 9000
 ```
 
 asgi server run 
-uvicorn Matflow.asgi:application --host 0.0.0.0 --port 8000 --reload
+uvicorn Matflow.asgi:application --host 0.0.0.0 --port 9000 --reload
 
 
 The server will now be available at:
 
 ```
-http://localhost:8000/
+http://localhost:9000/
 ```
 
 ---

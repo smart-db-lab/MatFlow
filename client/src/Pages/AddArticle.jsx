@@ -592,9 +592,9 @@ function AddArticle({
         };
 
         // Map form data to backend API format
-        // Use full API URL, default to localhost:8000 if not set
+        // Use API URL from environment (empty means same-origin/relative)
         const baseUrl =
-            import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+            import.meta.env.VITE_APP_API_URL || "";
         let apiData = {};
         let apiEndpoint = "";
 

@@ -102,6 +102,10 @@ def split_dataset(file):
         
         # Convert the split data to dictionaries
         debug("Converting dataframes to dictionaries...")
+        # Reset index to prevent index from becoming a column in records
+        X_train = X_train.reset_index(drop=True)
+        X_test = X_test.reset_index(drop=True)
+        
         X_train_dict = X_train.to_dict(orient="records")
         X_test_dict = X_test.to_dict(orient="records")
         

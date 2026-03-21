@@ -1,4 +1,4 @@
-import { Checkbox, Modal, Radio } from "../../Feature Engineering/muiCompat";
+import { Modal } from "../../Feature Engineering/muiCompat";
 import React, { useEffect, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { useParams } from "react-router-dom";
@@ -8,14 +8,12 @@ import Plotly from "plotly.js-dist-min";
 import LayoutSelector from "../../../Components/LayoutSelector/LayoutSelector";
 import { toast } from "react-toastify";
 import { getAuthHeaders } from "../../../../util/adminAuth";
-import { fetchDataFromIndexedDB } from "../../../../util/indexDB";
 import AgGridComponent from "../../../Components/AgGridComponent/AgGridComponent";
 import MultipleDropDown from "../../../Components/MultipleDropDown/MultipleDropDown";
 import SingleDropDown from "../../../Components/SingleDropDown/SingleDropDown";
 import Docs from "../../../../Docs/Docs";
 import { apiService } from "../../../../services/api/apiService";
 import { applyPlotlyTheme } from "../../../../shared/plotlyTheme";
-import { syncSplitAndModelCache } from "../../../../util/modelDatasetSync";
 import { getWorkspaceRootFromPath } from "../../../../util/utils";
 import {
     FE_SECTION_TITLE_CLASS,
@@ -25,14 +23,9 @@ import {
 function ModelEvaluation() {
     const dispatch = useDispatch();
     const { projectId } = useParams();
-    const modelsDbName = projectId ? `models:${projectId}` : "models";
-    const splitDbName = projectId
-        ? `splitted_dataset:${projectId}`
-        : "splitted_dataset";
     const [display_type, setDisplayType] = useState("Table");
     const [orientation, setOrientation] = useState("Vertical");
     const [test_dataset, setTestDataset] = useState();
-    const [include_data, setIncludeData] = useState(false);
     const [display_result, setDisplayResult] = useState("Test");
     const [allDatasetName, setAllDatasetName] = useState();
     const [columnName, setColumnName] = useState();
@@ -42,39 +35,96 @@ function ModelEvaluation() {
     const [graphData, setGraphData] = useState();
     const [notFound, setNotFound] = useState(false);
     const [allModelName, setAllModelName] = useState();
+    const [modelsByDataset, setModelsByDataset] = useState({});
+    const [datasetModelOrderMap, setDatasetModelOrderMap] = useState({});
     const [selectedSplitFolder, setSelectedSplitFolder] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const modelEvalPlotRef = useRef(null);
+    const hasUserSelectedDatasetRef = useRef(false);
+    const tableScrollRef = useRef(null);
+    const dragStateRef = useRef({
+        isDragging: false,
+        startX: 0,
+        startScrollLeft: 0,
+    });
 
     const [visible, setVisible] = useState(false);
 
     const openModal = () => setVisible(true);
     const closeModal = () => setVisible(false);
 
+    const handleTableMouseDown = (event) => {
+        if (!tableScrollRef.current) return;
+        dragStateRef.current.isDragging = true;
+        dragStateRef.current.startX = event.clientX;
+        dragStateRef.current.startScrollLeft = tableScrollRef.current.scrollLeft;
+        tableScrollRef.current.classList.add("model-eval-scrolling");
+    };
+
+    const handleTableMouseMove = (event) => {
+        if (!dragStateRef.current.isDragging || !tableScrollRef.current) return;
+        const dx = event.clientX - dragStateRef.current.startX;
+        tableScrollRef.current.scrollLeft =
+            dragStateRef.current.startScrollLeft - dx;
+    };
+
+    const handleTableMouseUp = () => {
+        if (!tableScrollRef.current) return;
+        dragStateRef.current.isDragging = false;
+        tableScrollRef.current.classList.remove("model-eval-scrolling");
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const synced = await syncSplitAndModelCache(projectId);
-                const tempDatasetName = synced.splitNames || [];
-                const tempModels = synced.modelEntries || [];
+                const serverRegistry = await apiService.matflow.ml
+                    .listModelsRegistry(projectId)
+                    .catch(() => null);
+                const serverModels = Array.isArray(serverRegistry?.models)
+                    ? serverRegistry.models
+                    : [];
+                const orderedRows = [...serverModels].sort(
+                    (a, b) =>
+                        new Date(b?.updated_at || 0).getTime() -
+                        new Date(a?.updated_at || 0).getTime(),
+                );
+                const grouped = {};
+                const datasetOrder = [];
+                const modelOrderByDataset = {};
+                const seenModelByDataset = {};
+
+                orderedRows.forEach((row) => {
+                    const datasetName = String(row?.dataset_name || "").trim();
+                    const modelName = String(row?.model_name || "").trim();
+                    if (!datasetName || !modelName) return;
+                    if (!grouped[datasetName]) {
+                        grouped[datasetName] = {};
+                        datasetOrder.push(datasetName);
+                        modelOrderByDataset[datasetName] = [];
+                        seenModelByDataset[datasetName] = new Set();
+                    }
+                    if (!seenModelByDataset[datasetName].has(modelName)) {
+                        seenModelByDataset[datasetName].add(modelName);
+                        modelOrderByDataset[datasetName].push(modelName);
+                    }
+                    grouped[datasetName][modelName] = {
+                        metrics_table: row?.metrics_table || {},
+                        split_folder: row?.split_folder || "",
+                    };
+                });
+                const tempDatasetName = datasetOrder;
+                setModelsByDataset(grouped);
+                setDatasetModelOrderMap(modelOrderByDataset);
                 setAllDatasetName(tempDatasetName);
 
-                // Check if ANY models exist for ANY dataset
-                const hasModels = tempModels.some((model) => {
-                    const datasetName = Object.keys(model)[0];
-                    return (
-                        model[datasetName] &&
-                        Object.keys(model[datasetName]).length > 0
-                    );
-                });
+                const hasModels = tempDatasetName.some(
+                    (datasetName) =>
+                        grouped[datasetName] &&
+                        Object.keys(grouped[datasetName]).length > 0,
+                );
 
                 setNotFound(!hasModels);
 
-                // If datasets exist, set initial model data for first dataset
-                if (tempDatasetName.length > 0) {
-                    const firstDatasetName = tempDatasetName[0];
-                    handleChangeDataset(firstDatasetName);
-                }
             } catch (error) {
                 console.error("Error loading models:", error);
                 setNotFound(true);
@@ -84,37 +134,33 @@ function ModelEvaluation() {
         fetchData();
     }, [projectId]);
 
-    const handleChangeDataset = async (e) => {
+    useEffect(() => {
+        if (!Array.isArray(allDatasetName) || allDatasetName.length === 0) return;
+        const hasValidDataset =
+            !!test_dataset && allDatasetName.includes(test_dataset);
+        if (hasUserSelectedDatasetRef.current && hasValidDataset) return;
+
+        const nextDataset = hasValidDataset ? test_dataset : allDatasetName[0];
+        if (nextDataset && nextDataset !== test_dataset) {
+            handleChangeDataset(nextDataset, undefined, { fromAuto: true });
+        }
+    }, [allDatasetName, datasetModelOrderMap, modelsByDataset, test_dataset]);
+
+    const handleChangeDataset = async (
+        e,
+        datasetModelMap = modelsByDataset,
+        options = {},
+    ) => {
+        const { fromAuto = false } = options;
+        hasUserSelectedDatasetRef.current = !fromAuto;
         setColumnDefs();
         setTestDataset(e);
-        let tempDatasets = await fetchDataFromIndexedDB(splitDbName).catch(
-            () => [],
-        );
-        tempDatasets = (tempDatasets || []).map((val) => {
-            if (Object.keys(val || {})[0] === e) {
-                return val[e];
-            }
-            return undefined;
-        });
-        tempDatasets = tempDatasets.filter(
-            (val) => val !== undefined && val !== null,
-        )[0];
+        const tempModels = datasetModelMap?.[e] || {};
+        const orderedModels = datasetModelOrderMap?.[e] || Object.keys(tempModels);
+        const firstModelName = orderedModels[0];
         setSelectedSplitFolder(
-            Array.isArray(tempDatasets) ? tempDatasets[5] || "" : "",
+            firstModelName ? tempModels[firstModelName]?.split_folder || "" : "",
         );
-
-        let tempModels = await fetchDataFromIndexedDB(modelsDbName).catch(
-            () => [],
-        );
-        tempModels = (tempModels || []).map((val) => {
-            if (Object.keys(val || {})[0] === e) {
-                return val[e];
-            }
-            return undefined;
-        });
-        tempModels = tempModels.filter(
-            (val) => val !== undefined && val !== null,
-        )[0];
 
         if (!tempModels || Object.keys(tempModels).length === 0) {
             setAllModelName([]);
@@ -123,7 +169,7 @@ function ModelEvaluation() {
             return;
         }
 
-        const keys = Object.keys(tempModels);
+        const keys = orderedModels;
 
         let temp = keys.map((val) => {
             return { ...tempModels[val].metrics_table, name: val };
@@ -164,17 +210,19 @@ function ModelEvaluation() {
             } else {
                 const columnSet = new Set(selectedColumn);
                 let tempDef = [];
+                const effectiveFilter = display_result;
+
                 let temp =
                     Array.isArray(columnName) && columnName.length > 0
                         ? columnName.map((key) => {
                               const tempCol = key.toLowerCase();
                               if (
-                                  display_result === "Test" ||
-                                  display_result === "Train"
+                                  effectiveFilter === "Test" ||
+                                  effectiveFilter === "Train"
                               ) {
                                   if (
                                       tempCol.includes(
-                                          display_result.toLowerCase(),
+                                          effectiveFilter.toLowerCase(),
                                       ) ||
                                       key === "name"
                                   )
@@ -186,7 +234,7 @@ function ModelEvaluation() {
                                           },
                                       });
                               }
-                              if (display_result === "All")
+                              if (effectiveFilter === "All")
                                   tempDef.push({
                                       headerName: key,
                                       field: key,
@@ -194,7 +242,7 @@ function ModelEvaluation() {
                                           return params.data[key];
                                       },
                                   });
-                              if (display_result === "Custom") {
+                              if (effectiveFilter === "Custom") {
                                   if (columnSet.has(key) || key === "name") {
                                       tempDef.push({
                                           headerName: key,
@@ -274,8 +322,8 @@ function ModelEvaluation() {
             </div>
         );
     return (
-        <div className="w-full h-full flex flex-col gap-4">
-            <div className="flex-1 flex gap-5">
+        <div className="w-full h-full flex flex-col gap-4 matflow-unified-input-height">
+            <div className="flex-1 flex gap-5 min-h-0">
                 {/* ── Left Panel: Controls ── */}
                 <div className="w-[340px] min-w-[300px] max-w-[400px]">
                     <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm">
@@ -295,8 +343,11 @@ function ModelEvaluation() {
                                 <SingleDropDown
                                     columnNames={allDatasetName}
                                     onValueChange={(e) =>
-                                        handleChangeDataset(e)
+                                        handleChangeDataset(e, undefined, {
+                                            fromAuto: false,
+                                        })
                                     }
+                                    initValue={test_dataset}
                                 />
                             </div>
 
@@ -316,7 +367,7 @@ function ModelEvaluation() {
                                 />
                             </div>
 
-                            {/* Orientation / Include Data */}
+                            {/* Orientation */}
                             {display_type === "Graph" ? (
                                 <div>
                                     <label className={FE_SUB_LABEL_CLASS}>
@@ -332,19 +383,7 @@ function ModelEvaluation() {
                                         onValueChange={setOrientation}
                                     />
                                 </div>
-                            ) : (
-                                <div className="flex items-center gap-2.5 py-1">
-                                    <Checkbox
-                                        onChange={(e) =>
-                                            setIncludeData(e.valueOf())
-                                        }
-                                    >
-                                        <span className="text-sm text-gray-700">
-                                            Include Data
-                                        </span>
-                                    </Checkbox>
-                                </div>
-                            )}
+                            ) : null}
 
                             {/* Display Result radio pills */}
                             <div>
@@ -363,8 +402,8 @@ function ModelEvaluation() {
                                                 }}
                                                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-150 ${
                                                     display_result === val
-                                                        ? "bg-white text-gray-900 shadow-sm border border-gray-200"
-                                                        : "text-gray-500 hover:text-gray-700 hover:bg-white/60"
+                                                        ? "bg-primary/15 text-primary-dark shadow-sm border border-primary/40 ring-1 ring-primary/30 font-semibold"
+                                                        : "text-gray-500 hover:text-gray-700 hover:bg-white/60 border border-transparent"
                                                 }`}
                                             >
                                                 {val}
@@ -460,10 +499,10 @@ function ModelEvaluation() {
                 </div>
 
                 {/* ── Right Panel: Output ── */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0 flex flex-col">
                     {/* Table output */}
                     {columnDefs && columnDefs.length > 0 && (
-                        <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-w-0">
                             {/* Header bar */}
                             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between gap-4">
                                 <h3
@@ -493,16 +532,23 @@ function ModelEvaluation() {
                             </div>
 
                             {/* Custom styled table */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
+                            <div
+                                ref={tableScrollRef}
+                                className="overflow-x-auto min-w-0 model-eval-scrollbar model-eval-scroll-area"
+                                onMouseDown={handleTableMouseDown}
+                                onMouseMove={handleTableMouseMove}
+                                onMouseUp={handleTableMouseUp}
+                                onMouseLeave={handleTableMouseUp}
+                            >
+                                <table className="w-full min-w-max">
                                     <thead>
-                                        <tr className="bg-gray-50/80">
+                                        <tr className="bg-gray-50">
                                             {columnDefs.map((col, i) => (
                                                 <th
                                                     key={col?.field || i}
                                                     className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500 text-left border-b border-gray-100 ${
                                                         col?.field === "name"
-                                                            ? "sticky left-0 bg-gray-50/80 z-10"
+                                                            ? "sticky left-0 bg-gray-50 z-20 border-r border-gray-100"
                                                             : ""
                                                     }`}
                                                 >
@@ -516,7 +562,7 @@ function ModelEvaluation() {
                                             file.map((row, rowIdx) => (
                                                 <tr
                                                     key={rowIdx}
-                                                    className="group hover:bg-primary/5 transition-colors duration-100"
+                                                    className="group hover:bg-teal-50 transition-colors duration-100"
                                                 >
                                                     {columnDefs.map(
                                                         (col, colIdx) => {
@@ -556,7 +602,7 @@ function ModelEvaluation() {
                                                                     }
                                                                     className={`px-5 py-3.5 text-sm whitespace-nowrap ${
                                                                         isName
-                                                                            ? "sticky left-0 bg-white group-hover:bg-primary/5 z-10 font-semibold text-gray-900"
+                                                                            ? "sticky left-0 z-20 bg-white group-hover:bg-teal-50 font-semibold text-gray-900 border-r border-gray-100 overflow-hidden"
                                                                             : "text-gray-700"
                                                                     }`}
                                                                 >
@@ -619,7 +665,7 @@ function ModelEvaluation() {
                             </div>
 
                             {/* Footer with count */}
-                            <div className="px-5 py-2.5 border-t border-gray-100 bg-gray-50/50">
+                            <div className="px-5 py-2.5 border-t border-gray-100 bg-gray-50">
                                 <p className="text-[11px] text-gray-400 font-medium">
                                     {file ? file.length : 0} model
                                     {file && file.length !== 1 ? "s" : ""}{" "}
@@ -653,14 +699,15 @@ function ModelEvaluation() {
                                                 trace?.type === "bar"
                                                     ? {
                                                           ...trace,
-                                                          width: 0.45,
+                                                          // Keep bars visually slimmer like EDA bar charts.
+                                                          width: 0.22,
                                                       }
                                                     : trace,
                                         )}
                                         layout={applyPlotlyTheme({
                                             ...(graphData?.layout || {}),
-                                            bargap: 0.45,
-                                            bargroupgap: 0.2,
+                                            bargap: 0.62,
+                                            bargroupgap: 0.32,
                                         })}
                                         config={{
                                             editable: true,

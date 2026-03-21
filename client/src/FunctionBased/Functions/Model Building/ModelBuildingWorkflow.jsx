@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { setActiveFunction } from "../../../Slices/SideBarSlice";
 import { fetchDataFromIndexedDB } from "../../../util/indexDB";
 import { sessionSetString } from "../../../util/sessionProjectStorage";
+import { apiService } from "../../../services/api/apiService";
 import SplitDataset from "./SplitDataset/SplitDataset";
 import BuildModel from "./BuildModel/BuildModel";
 import ModelEvaluation from "./ModelEvaluation/ModelEvaluation";
@@ -15,7 +16,7 @@ import { styled } from "@mui/material/styles";
 const STAGES = [
     {
         id: "split",
-        label: "Split Dataset",
+        label: "Split Dataset Test-Train",
         functionName: "Split Dataset",
         key: "splitted_dataset",
     },
@@ -27,25 +28,25 @@ const STAGES = [
         requires: "split",
     },
     {
-        id: "evaluate",
-        label: "Model Evaluation",
-        functionName: "Model Evaluation",
-        key: "models",
-        requires: "build",
-    },
-    {
         id: "predict",
-        label: "Model Prediction",
+        label: "Evaluate Model Performance",
         functionName: "Model Prediction",
         key: "models",
         requires: "build",
     },
     {
         id: "models",
-        label: "Models",
+        label: "Saved Models",
         functionName: "Models",
         key: "models",
-        alwaysAccessible: true,
+        requires: "build",
+    },
+    {
+        id: "evaluate",
+        label: "Compare Models",
+        functionName: "Model Evaluation",
+        key: "models",
+        requires: "models",
     },
 ];
 
@@ -131,24 +132,26 @@ function ModelBuildingWorkflow({ csvData }) {
     const splitDbName = projectId
         ? `splitted_dataset:${projectId}`
         : "splitted_dataset";
-    const modelsDbName = projectId ? `models:${projectId}` : "models";
     const activeFunction = useSelector((state) => state.sideBar.activeFunction);
     const functionNodeMap = {
-        "Split Dataset": "5-0-0",
-        "Build Model": "5-0-1",
-        "Model Evaluation": "5-0-2",
-        "Model Prediction": "5-0-3",
-        Models: "5-0-4",
+        "Split Dataset": "5-0",
+        "Build Model": "5-1",
+        "Model Prediction": "5-2",
+        Models: "5-3",
+        "Model Evaluation": "5-4",
     };
     const [completionStatus, setCompletionStatus] = useState({
         split: false,
         build: false,
-        evaluate: false,
         predict: false,
-        models: true, // Always accessible
+        models: false,
+        evaluate: false,
     });
     const [currentStage, setCurrentStage] = useState("split");
     const [loading, setLoading] = useState(true);
+    const [hideSavedModelsNextButton, setHideSavedModelsNextButton] =
+        useState(false);
+    const [initialStageCaptured, setInitialStageCaptured] = useState(false);
 
     // Determine current stage from activeFunction
     useEffect(() => {
@@ -156,15 +159,23 @@ function ModelBuildingWorkflow({ csvData }) {
             "Split Dataset": "split",
             "Model Building": "split",
             "Build Model": "build",
-            "Model Evaluation": "evaluate",
             "Model Prediction": "predict",
+            "Evaluate Model Performance": "predict",
             Models: "models",
+            "Saved Models": "models",
+            "Model Evaluation": "evaluate",
+            "Compare Models": "evaluate",
         };
 
         if (activeFunction && stageMap[activeFunction]) {
-            setCurrentStage(stageMap[activeFunction]);
+            const resolvedStage = stageMap[activeFunction];
+            setCurrentStage(resolvedStage);
+            if (!initialStageCaptured) {
+                setHideSavedModelsNextButton(resolvedStage === "models");
+                setInitialStageCaptured(true);
+            }
         }
-    }, [activeFunction]);
+    }, [activeFunction, initialStageCaptured]);
 
     // Check completion status from IndexedDB
     const checkCompletionStatus = async () => {
@@ -175,16 +186,27 @@ function ModelBuildingWorkflow({ csvData }) {
             const splitData = await fetchDataFromIndexedDB(splitDbName);
             const splitComplete = splitData && splitData.length > 0;
 
-            // Check models completion
-            const modelsData = await fetchDataFromIndexedDB(modelsDbName);
-            const modelsComplete = modelsData && modelsData.length > 0;
+            // Check models completion (server-first, IndexedDB fallback)
+            const serverRegistry = await apiService.matflow.ml
+                .listModelsRegistry(projectId)
+                .catch(() => null);
+            const serverModels = Array.isArray(serverRegistry?.models)
+                ? serverRegistry.models
+                : [];
+            let modelsComplete = serverModels.length > 0;
+            if (!modelsComplete) {
+                const modelsData = await fetchDataFromIndexedDB(
+                    projectId ? `models:${projectId}` : "models",
+                );
+                modelsComplete = modelsData && modelsData.length > 0;
+            }
 
             setCompletionStatus({
                 split: splitComplete,
                 build: modelsComplete,
-                evaluate: modelsComplete,
                 predict: modelsComplete,
-                models: true,
+                models: modelsComplete,
+                evaluate: modelsComplete,
             });
 
             return { splitComplete, modelsComplete };
@@ -220,17 +242,17 @@ function ModelBuildingWorkflow({ csvData }) {
                     }),
                 );
             } else if (stage === "build") {
-                dispatch(setActiveFunction("Model Evaluation"));
+                dispatch(setActiveFunction("Model Prediction"));
                 sessionSetString(
                     "activeFunction",
                     projectId,
-                    "Model Evaluation",
+                    "Model Prediction",
                 );
                 window.dispatchEvent(
                     new CustomEvent("forceFunctionSelection", {
                         detail: {
-                            nodeId: functionNodeMap["Model Evaluation"],
-                            label: "Model Evaluation",
+                            nodeId: functionNodeMap["Model Prediction"],
+                            label: "Model Prediction",
                         },
                     }),
                 );
@@ -260,6 +282,10 @@ function ModelBuildingWorkflow({ csvData }) {
                         detail: { nodeId, label: stage.functionName },
                     }),
                 );
+            }
+            if (stage.id === "models") {
+                // User navigated through workflow; allow moving to next stage.
+                setHideSavedModelsNextButton(false);
             }
         }
     };
@@ -319,6 +345,19 @@ function ModelBuildingWorkflow({ csvData }) {
         }
     };
 
+    const handleGoToCompareModels = () => {
+        dispatch(setActiveFunction("Model Evaluation"));
+        sessionSetString("activeFunction", projectId, "Model Evaluation");
+        const nodeId = functionNodeMap["Model Evaluation"];
+        if (nodeId) {
+            window.dispatchEvent(
+                new CustomEvent("forceFunctionSelection", {
+                    detail: { nodeId, label: "Model Evaluation" },
+                }),
+            );
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -328,7 +367,7 @@ function ModelBuildingWorkflow({ csvData }) {
     }
 
     return (
-        <div className="w-full h-full flex flex-col">
+        <div className="w-full h-full flex flex-col matflow-unified-input-height">
             {/* Progress Bar - Material UI Stepper */}
             <Box className="w-full bg-white px-4 py-2 mb-2">
                 <StyledStepper activeStep={getActiveStep()} alternativeLabel>
@@ -389,6 +428,17 @@ function ModelBuildingWorkflow({ csvData }) {
                 </StyledStepper>
             </Box>
 
+            {currentStage === "models" && !hideSavedModelsNextButton && (
+                <div className="mb-2 flex justify-end px-1">
+                    <button
+                        type="button"
+                        onClick={handleGoToCompareModels}
+                        className="inline-flex items-center gap-2 rounded-md bg-[#0D9488] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0F766E]"
+                    >
+                        Next: Compare Models
+                    </button>
+                </div>
+            )}
             {/* Stage Content */}
             <div className="flex-1">{renderStageComponent()}</div>
         </div>

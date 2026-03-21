@@ -29,7 +29,7 @@ const RESULT_REGRESSOR = [
   "Actual vs. Predicted",
   "Residuals vs. Predicted",
   "Histogram of Residuals",
-  "QQ Plot",
+  "Quantile-Quantile (Q-Q) Plot",
   "Box Plot of Residuals",
 ];
 

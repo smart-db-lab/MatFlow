@@ -28,15 +28,23 @@ const trailingSlashRedirectPlugin = (appBase) => ({
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), "");
     const appBase = (env.VITE_APP_BASE_PATH || "/").replace(/\/+$/, "") + "/";
+    const proxyTarget = env.VITE_PROXY_TARGET || env.VITE_APP_API_URL;
+
+    if (!proxyTarget) {
+        throw new Error(
+            "Missing proxy target: set VITE_PROXY_TARGET (or VITE_APP_API_URL) in env.",
+        );
+    }
 
     return {
         base: appBase,
         plugins: [react(), trailingSlashRedirectPlugin(appBase)],
         server: {
+            port: 6060,
             open: false,
             proxy: {
                 "/api": {
-                    target: env.VITE_PROXY_TARGET || "http://127.0.0.1:8000",
+                    target: proxyTarget,
                     changeOrigin: true,
                 },
             },

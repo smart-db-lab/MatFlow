@@ -967,7 +967,7 @@ class Command(BaseCommand):
                 "service_key": "matflow",
                 "service_name": "MatFlow",
                 "service_description": "Streamline your machine learning workflow with our intuitive platform. Design, execute, and manage complex ML pipelines with ease.",
-                "service_url": "http://localhost:5173/matflow"
+                "service_url": "http://localhost:6060/matflow"
             },
           
         ]
@@ -981,7 +981,30 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(self.style.SUCCESS(f"Created service: {service.service_name}"))
             else:
-                self.stdout.write(self.style.WARNING(f"Service already exists: {service.service_name}"))
+                updated = False
+                if service.service_name != service_data["service_name"]:
+                    service.service_name = service_data["service_name"]
+                    updated = True
+                if service.service_description != service_data["service_description"]:
+                    service.service_description = service_data["service_description"]
+                    updated = True
+                if service.service_url != service_data["service_url"]:
+                    service.service_url = service_data["service_url"]
+                    updated = True
+
+                if updated:
+                    service.save()
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"Updated service: {service.service_name} ({service.service_url})"
+                        )
+                    )
+                else:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"Service already up to date: {service.service_name}"
+                        )
+                    )
 
         self.stdout.write(self.style.SUCCESS("Admin dashboard seeding completed!"))
         self.stdout.write(self.style.WARNING(

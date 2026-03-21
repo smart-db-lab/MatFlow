@@ -7,6 +7,10 @@ const DatasetInformation = ({ csvData }) => {
   const activeCsvFile = useSelector((state) => state.uploadedFile.activeFile);
   const previousFile = useSelector((state) => state.uploadedFile.previousFile);
   const [isDataCleared, setIsDataCleared] = useState(false);
+  const datasetName = useMemo(() => {
+    const rawName = String(activeCsvFile?.name || "").split("/").pop();
+    return rawName || "Selected Dataset";
+  }, [activeCsvFile]);
 
   // Clear cache when file changes
   useEffect(() => {
@@ -51,9 +55,9 @@ const DatasetInformation = ({ csvData }) => {
 
   return (
     <div>
-      <div className="mb-3">
+      <div className="mb-2">
         <h2 className="text-base font-semibold text-gray-900">
-          Materials Data Profile
+          Materials Data Profile - {datasetName}
           {isDataCleared && (
             <span className="ml-2 text-xs text-green-600">
               ✅ Cache cleared
@@ -66,6 +70,14 @@ const DatasetInformation = ({ csvData }) => {
       )}
     </div>
   );
+};
+
+const PROFILE_HEADER_LABELS = {
+  column: 'Property name',
+  uniqueValues: 'Number of Unique Values',
+  nonNullCount: 'No of NonNull Values',
+  nullPercentage: 'Null Percentage (℅)',
+  dtype: 'Data Type',
 };
 
 const MyAgGridComponent = ({ rowData }) => {
@@ -126,7 +138,7 @@ const MyAgGridComponent = ({ rowData }) => {
   const columnDefs = useMemo(() => {
     const columns = Object.keys(data[0] || {});
     return columns.map((column) => ({
-      headerName: column,
+      headerName: PROFILE_HEADER_LABELS[column] || column,
       field: column,
       filter: true,
       filterParams: {

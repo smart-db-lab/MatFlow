@@ -113,17 +113,33 @@ function DashBoardTop() {
     setAvatarLoadFailed(false);
   }, [userData?.profile_image_url]);
 
+  const getDisplayName = () => {
+    const username = userData?.username?.trim();
+    const emailLocal = userData?.email?.split("@")[0]?.trim();
+    if (username && (!emailLocal || username.toLowerCase() !== emailLocal.toLowerCase())) {
+      return username;
+    }
+    const firstName = userData?.first_name?.trim();
+    if (firstName) return firstName;
+    const fullName = userData?.full_name?.trim();
+    if (fullName) return fullName;
+    if (username) return username;
+    if (userData?.email) return userData.email.split("@")[0];
+    return "User";
+  };
+
   const getInitials = () => {
-    if (userData?.full_name) {
-      const names = userData.full_name.trim().split(" ");
+    const displayName = getDisplayName();
+    if (displayName) {
+      const names = displayName.trim().split(" ");
       if (names.length >= 2) return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
-      return userData.full_name.charAt(0).toUpperCase();
+      return displayName.charAt(0).toUpperCase();
     }
     if (userData?.email) return userData.email.charAt(0).toUpperCase();
     return "A";
   };
 
-  const baseUrl = import.meta.env.VITE_APP_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "";
   const titleImageUrl = headerSection?.title_image
     ? headerSection.title_image.startsWith("http") ? headerSection.title_image : `${baseUrl}${headerSection.title_image}`
     : null;
@@ -184,7 +200,7 @@ function DashBoardTop() {
         <div className="flex items-center gap-2">
           {guest && (
             <button
-              onClick={() => { endGuestSession(); navigate("/login?mode=register"); }}
+              onClick={() => { endGuestSession(); navigate("/register"); }}
               className="relative flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-primary transition-colors duration-200 group"
             >
               <User size={15} strokeWidth={2} className="text-primary" />
@@ -219,7 +235,7 @@ function DashBoardTop() {
                   <div className={accountMenuStyles.header}>
                     <div className="min-w-0">
                       <p className={accountMenuStyles.headerName}>
-                        {userData.full_name || userData.email || "User"}
+                        {getDisplayName()}
                       </p>
                     </div>
                     {(isAdmin || guest) && (

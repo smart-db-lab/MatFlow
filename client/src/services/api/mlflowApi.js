@@ -24,12 +24,20 @@ export const mlflowApi = {
             return await parseResponse(response);
         },
 
-        signup: async (username, email, password) => {
+        adminLogin: async (email, password) => {
+            const response = await apiFetch(`${API_BASE_URL}/api/auth/admin/login/`, {
+                method: "POST",
+                body: JSON.stringify({ email, password }),
+            });
+            return await parseResponse(response);
+        },
+
+        signup: async (first_name, last_name, email, password) => {
             const response = await apiFetch(
                 `${API_BASE_URL}/api/auth/signup/`,
                 {
                     method: "POST",
-                    body: JSON.stringify({ username, email, password }),
+                    body: JSON.stringify({ first_name, last_name, email, password }),
                 },
             );
             return await parseResponse(response);
@@ -37,10 +45,66 @@ export const mlflowApi = {
 
         verifyCode: async (email, code) => {
             const response = await apiFetch(
-                `${API_BASE_URL}/api/auth/verify-code/`,
+                `${API_BASE_URL}/api/auth/verify-otp/`,
                 {
                     method: "POST",
-                    body: JSON.stringify({ email, code }),
+                    body: JSON.stringify({
+                        email,
+                        code,
+                        purpose: "registration",
+                    }),
+                },
+            );
+            return await parseResponse(response);
+        },
+
+        resendVerificationOtp: async (email) => {
+            const response = await apiFetch(
+                `${API_BASE_URL}/api/auth/resend-otp/`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ email }),
+                },
+            );
+            return await parseResponse(response);
+        },
+
+        forgotPassword: async (email) => {
+            const response = await apiFetch(
+                `${API_BASE_URL}/api/auth/forgot-password/`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ email }),
+                },
+            );
+            return await parseResponse(response);
+        },
+
+        verifyForgotPasswordOtp: async (email, code) => {
+            const response = await apiFetch(
+                `${API_BASE_URL}/api/auth/verify-forgot-password-otp/`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        email,
+                        code,
+                        purpose: "password_reset",
+                    }),
+                },
+            );
+            return await parseResponse(response);
+        },
+
+        resetPassword: async (token, newPassword, confirmPassword) => {
+            const response = await apiFetch(
+                `${API_BASE_URL}/api/auth/reset-password/`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        token,
+                        new_password: newPassword,
+                        confirm_password: confirmPassword,
+                    }),
                 },
             );
             return await parseResponse(response);

@@ -12,6 +12,7 @@ from eda.graph.plotly_theme import apply_modern_theme, MODERN_COLORS
 
 def prediction_regression(file):
     target_var = file.get("Target Variable")
+    model_opt = file.get("regressor")
     
     # Get the dataset - now seamlessly injected by _inject_workspace from workspace_id and filename
     data_dict = file.get("file", [])
@@ -32,9 +33,9 @@ def prediction_regression(file):
             pass
     
     result_opt = file.get("Result")
-    return show_result(y, y_pred, result_opt, X=X)
+    return show_result(y, y_pred, result_opt, X=X, model_opt=model_opt)
 
-def show_result(y, y_pred, result_opt, X=None):
+def show_result(y, y_pred, result_opt, X=None, model_opt=None):
     # Ensure arrays are numpy arrays and flatten them
     y = np.asarray(y).flatten()
     y_pred = np.asarray(y_pred).flatten()
@@ -59,6 +60,7 @@ def show_result(y, y_pred, result_opt, X=None):
         predicted_data = [[i, float(val)] for i, val in enumerate(y_pred)]
         
         option = {
+            "responsive": True,
             "backgroundColor": "#ffffff",
             "title": {
                 "text": "Actual vs. Predicted Values",
@@ -150,6 +152,7 @@ def show_result(y, y_pred, result_opt, X=None):
         predicted_data = [[i, float(val)] for i, val in enumerate(y_pred)]
         
         option = {
+            "responsive": True,
             "backgroundColor": "#ffffff",
             "title": {
                 "text": "Actual vs. Predicted Values",
@@ -224,9 +227,10 @@ def show_result(y, y_pred, result_opt, X=None):
         zero_line = [[float(axis_min), 0], [float(axis_max), 0]]
         
         option = {
+            "responsive": True,
             "backgroundColor": "#ffffff",
             "title": {
-                "text": "Residuals vs. Predicted",
+                "text": "Residuals vs. Predicted Values",
                 "left": "center",
                 "top": 12,
                 "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
@@ -285,6 +289,7 @@ def show_result(y, y_pred, result_opt, X=None):
         data = [[float(bc), int(h)] for bc, h in zip(bin_centers, hist)]
         
         option = {
+            "responsive": True,
             "backgroundColor": "#ffffff",
             "title": {
                 "text": "Histogram of Residuals",
@@ -343,6 +348,7 @@ def show_result(y, y_pred, result_opt, X=None):
         ref_line_data = [[float(line_min), float(line_min)], [float(line_max), float(line_max)]]
         
         option = {
+            "responsive": True,
             "backgroundColor": "#ffffff",
             "title": {
                 "text": "Normal Q-Q Plot",
@@ -413,6 +419,7 @@ def show_result(y, y_pred, result_opt, X=None):
         whisker_high = np.percentile(residuals_sorted, 95)
         
         option = {
+            "responsive": True,
             "backgroundColor": "#ffffff",
             "title": {
                 "text": "Box Plot of Residuals",
@@ -470,6 +477,7 @@ def show_result(y, y_pred, result_opt, X=None):
         perfect_line = [[float(axis_min), float(axis_min)], [float(axis_max), float(axis_max)]]
         
         option = {
+            "responsive": True,
             "backgroundColor": "#ffffff",
             "title": {
                 "text": "Regression Line Plot",
@@ -531,57 +539,105 @@ def show_result(y, y_pred, result_opt, X=None):
         return JsonResponse({'graph': [option]})
 
     elif result_opt == "Metrics Summary":
+        print("Calculating regression metrics...")
         r2 = r2_score(y, y_pred)
         mae = mean_absolute_error(y, y_pred)
         mse = mean_squared_error(y, y_pred)
         rmse = np.sqrt(mse)
 
-        fig = make_subplots(
-            rows=2, cols=2,
-            specs=[[{"type": "indicator"}, {"type": "indicator"}],
-                   [{"type": "indicator"}, {"type": "indicator"}]],
-            horizontal_spacing=0.15,
-            vertical_spacing=0.15,
-        )
+        # Format values for display (scientific notation for large numbers)
+        mae_str = f"{mae:.3g}"
+        mse_str = f"{mse:.3g}"
+        rmse_str = f"{rmse:.3g}"
+        r2_str = f"{r2:.4g}"
 
-        fig.add_trace(go.Indicator(
-            mode="gauge+number",
-            value=r2,
-            title={'text': 'R\u00b2 Score', 'font': {'size': 16, 'color': '#374151'}},
-            number={'font': {'size': 32}},
-            gauge={
-                'axis': {'range': [0, 1], 'tickfont': {'size': 10, 'color': '#9ca3af'}},
-                'bar': {'color': MODERN_COLORS[1], 'thickness': 0.75},
-                'bgcolor': '#f3f4f6',
-                'borderwidth': 0,
-                'steps': [
-                    {'range': [0, 0.5], 'color': '#fee2e2'},
-                    {'range': [0.5, 0.8], 'color': '#fef3c7'},
-                    {'range': [0.8, 1], 'color': '#d1fae5'},
-                ],
+        # Create ECharts gauge options for metrics display with responsive layout
+        option = {
+            "responsive": True,
+            "maintainAspectRatio": False,
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": f"{str(model_opt or '').strip()} Model Performance Metrics" if model_opt else "Regression Model Performance Metrics",
+                "left": "center",
+                "top": "2%",
+                "textStyle": {"color": "#0f172a", "fontSize": 16, "fontWeight": 600}
+            },
+            "grid": {
+                "containLabel": True,
+                "left": "5%",
+                "right": "5%",
+                "top": "15%",
+                "bottom": "8%"
+            },
+            "series": [
+                {
+                    "name": "R² Score",
+                    "type": "gauge",
+                    "center": ["30%", "60%"],
+                    "radius": "35%",
+                    "min": 0,
+                    "max": 1,
+                    "progress": {"itemStyle": {"color": MODERN_COLORS[1]}},
+                    "axisLine": {"lineStyle": {"color": [[1, "#e5e7eb"]]}},
+                    "axisTick": {"show": False},
+                    "splitLine": {"show": False},
+                    "axisLabel": {"show": False},
+                    "detail": {"valueAnimation": True, "formatter": r2_str, "color": MODERN_COLORS[1], "fontSize": 14, "offsetCenter": [0, "60%"]},
+                    "data": [{"value": float(r2), "name": "R² Score"}]
+                },
+                {
+                    "name": "MAE",
+                    "type": "gauge",
+                    "center": ["70%", "60%"],
+                    "radius": "35%",
+                    "min": 0,
+                    "max": max(1, mae * 1.2),
+                    "progress": {"itemStyle": {"color": MODERN_COLORS[0]}},
+                    "axisLine": {"lineStyle": {"color": [[1, "#e5e7eb"]]}},
+                    "axisTick": {"show": False},
+                    "splitLine": {"show": False},
+                    "axisLabel": {"show": False},
+                    "detail": {"valueAnimation": True, "formatter": mae_str, "color": MODERN_COLORS[0], "fontSize": 14, "offsetCenter": [0, "60%"]},
+                    "data": [{"value": float(mae), "name": "MAE"}]
+                },
+                {
+                    "name": "MSE",
+                    "type": "gauge",
+                    "center": ["30%", "25%"],
+                    "radius": "35%",
+                    "min": 0,
+                    "max": max(1, mse * 1.2),
+                    "progress": {"itemStyle": {"color": MODERN_COLORS[4]}},
+                    "axisLine": {"lineStyle": {"color": [[1, "#e5e7eb"]]}},
+                    "axisTick": {"show": False},
+                    "splitLine": {"show": False},
+                    "axisLabel": {"show": False},
+                    "detail": {"valueAnimation": True, "formatter": mse_str, "color": MODERN_COLORS[4], "fontSize": 14, "offsetCenter": [0, "60%"]},
+                    "data": [{"value": float(mse), "name": "MSE"}]
+                },
+                {
+                    "name": "RMSE",
+                    "type": "gauge",
+                    "center": ["70%", "25%"],
+                    "radius": "35%",
+                    "min": 0,
+                    "max": max(1, rmse * 1.2),
+                    "progress": {"itemStyle": {"color": MODERN_COLORS[3]}},
+                    "axisLine": {"lineStyle": {"color": [[1, "#e5e7eb"]]}},
+                    "axisTick": {"show": False},
+                    "splitLine": {"show": False},
+                    "axisLabel": {"show": False},
+                    "detail": {"valueAnimation": True, "formatter": rmse_str, "color": MODERN_COLORS[3], "fontSize": 14, "offsetCenter": [0, "60%"]},
+                    "data": [{"value": float(rmse), "name": "RMSE"}]
+                }
+            ],
+            "legend": {
+                "data": ["R² Score", "MAE", "MSE", "RMSE"],
+                "orient": "horizontal",
+                "bottom": "1%",
+                "left": "center",
+                "textStyle": {"color": "#374151", "fontSize": 11}
             }
-        ), row=1, col=1)
-
-        fig.add_trace(go.Indicator(
-            mode="number",
-            value=mae,
-            title={'text': 'MAE', 'font': {'size': 16, 'color': '#374151'}},
-            number={'font': {'color': MODERN_COLORS[0], 'size': 36}, 'valueformat': '.4f'},
-        ), row=1, col=2)
-
-        fig.add_trace(go.Indicator(
-            mode="number",
-            value=mse,
-            title={'text': 'MSE', 'font': {'size': 16, 'color': '#374151'}},
-            number={'font': {'color': MODERN_COLORS[4], 'size': 36}, 'valueformat': '.4f'},
-        ), row=2, col=1)
-
-        fig.add_trace(go.Indicator(
-            mode="number",
-            value=rmse,
-            title={'text': 'RMSE', 'font': {'size': 16, 'color': '#374151'}},
-            number={'font': {'color': MODERN_COLORS[3], 'size': 36}, 'valueformat': '.4f'},
-        ), row=2, col=2)
-
-        apply_modern_theme(fig, title='Regression Metrics Summary')
-        return JsonResponse({'graph': pio.to_json(fig)})
+        }
+        import json
+        return JsonResponse({'graph': [option]})

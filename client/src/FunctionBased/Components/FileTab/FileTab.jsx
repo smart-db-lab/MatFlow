@@ -1,174 +1,108 @@
 import React, { useEffect, useState, useRef } from "react";
-import { IoIosArrowDown, IoIosArrowForward } from "react-icons/io";
-import { MdDriveFileMove } from "react-icons/md";
 import {
     FileText,
     FileSpreadsheet,
-    Pencil,
-    Trash2,
-    Upload,
-    ArrowLeftRight,
-    FolderPlus,
-    FolderOpen,
-    Folder,
-    Search,
-    X,
 } from "lucide-react";
 import * as Papa from "papaparse";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import {
-    setActiveFile,
-    setActiveFolderAction,
-} from "../../../Slices/UploadedFileSlice";
 import { setActiveWorkspace } from "../../../Slices/workspaceSlice";
 import { toast } from "react-toastify";
-import {
-    clearIndexedDB,
-    deleteIndexedDB,
-    storeDataInIndexedDB,
-} from "../../../util/indexDB";
-import { setActiveFunction } from "../../../Slices/SideBarSlice";
 import { apiService, commonApi } from "../../../services/api/apiService";
 import ConfirmDeleteModal from "../../../Components/ConfirmDeleteModal";
 import {
-    sessionGetJson,
-    sessionGetString,
-    sessionSetJson,
-    sessionSetString,
-} from "../../../util/sessionProjectStorage";
-import { syncSplitAndModelCache } from "../../../util/modelDatasetSync";
+    formatFolderDisplayName,
+    isReservedSystemFolderPath,
+    filterDirectoryStructure,
+    collectFolderPaths,
+    getWorkspaceRootFromPath,
+    getWorkspaceRelativeFolderPath,
+} from "./utils/fileTreeUtils";
+import FileTreeView from "./components/FileTreeView";
+import FileTabHeader from "./components/FileTabHeader";
+import FileTabBottomToolbar from "./components/FileTabBottomToolbar";
+import DataPreviewTable from "./components/DataPreviewTable";
+import { useFileTreeState } from "./hooks/useFileTreeState";
+import { useFileActions } from "./hooks/useFileActions";
 
 const ENABLE_MOVE_UI = false;
 
 function FileTab({ projectId, projectName }) {
     const navigate = useNavigate();
-    const [directoryStructure, setDirectoryStructure] = useState({}); // Fetched directory structure
-    const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
-    const [fileActiveId, setFileActiveId] = useState(""); // Active file ID
-    const [activeFolder, setActiveFolder] = useState(""); // Active folder ID
-    const [uploadedFile, setUploadedFile] = useState(""); // Uploaded file
-    const [newFolderName, setNewFolderName] = useState(""); // New folder creation
-    const [expandedFolders, setExpandedFolders] = useState([]); // Track expanded folders
-    const [convertFile, setConvertFile] = useState(null); // File selected for conversion
-    const [showConvertModal, setShowConvertModal] = useState(false); // Modal visibility
-    const [showUploadModal, setShowUploadModal] = useState(false); // CSV upload preview modal visibility
-    const [renameTarget, setRenameTarget] = useState(null); // { name, parentFolder, type:'file'|'folder' }
-    const [renameValue, setRenameValue] = useState("");
-    const [deleteTarget, setDeleteTarget] = useState(null); // { type:'project' } | { folder, file?, displayName }
-    const [moveTarget, setMoveTarget] = useState(null); // { type:'file'|'folder', name, parentFolder, sourcePath }
-    const [moveDestination, setMoveDestination] = useState("");
-    const [displayProjectName, setDisplayProjectName] = useState(
-        projectName || "Project Files",
-    );
-    const [showSearchInput, setShowSearchInput] = useState(false);
-    const [directorySearchQuery, setDirectorySearchQuery] = useState("");
-
     const dispatch = useDispatch();
     const render = useSelector((state) => state.uploadedFile.rerender);
     const inputRef = useRef();
     const convertInputRef = useRef();
     const renameInputRef = useRef();
-    const LEGACY_ROOT_OUTPUT_KEYS = new Set(["output", "Output"]);
+    const {
+        directoryStructure,
+        isDirectoryLoading,
+        fileActiveId,
+        setFileActiveId,
+        activeFolder,
+        setActiveFolder,
+        expandedFolders,
+        setExpandedFolders,
+        displayProjectName,
+        setDisplayProjectName,
+        showSearchInput,
+        setShowSearchInput,
+        directorySearchQuery,
+        setDirectorySearchQuery,
+        fetchDirectoryStructure,
+        setActiveFolderWithoutToggling,
+        toggleFolderExpansion,
+        handleFileSelect,
+        clearActiveFolder,
+    } = useFileTreeState({
+        projectId,
+        projectName,
+        render,
+        dispatch,
+    });
 
-    const sanitizeDirectoryStructure = (rawStructure) => {
-        if (!rawStructure || typeof rawStructure !== "object") return {};
-        const next = { ...rawStructure };
-        for (const key of Object.keys(next)) {
-            if (LEGACY_ROOT_OUTPUT_KEYS.has(String(key || "").trim())) {
-                delete next[key];
-            }
-        }
-        return next;
-    };
-
-    useEffect(() => {
-        setDisplayProjectName(projectName || "Project Files");
-    }, [projectName]);
-
-    // Initialise project-scoped local state when projectId changes
-    useEffect(() => {
-        if (!projectId) {
-            setDirectoryStructure({});
-            setIsDirectoryLoading(false);
-            setFileActiveId("");
-            setActiveFolder("");
-            setExpandedFolders([]);
-            return;
-        }
-
-        const storedActiveFileId = sessionGetString("activeFileId", projectId);
-        const storedActiveFolder = sessionGetString("activeFolder", projectId);
-        const storedExpanded = sessionGetJson("expandedFolders", projectId, []);
-
-        setFileActiveId(storedActiveFileId);
-        setActiveFolder(storedActiveFolder);
-        setExpandedFolders(Array.isArray(storedExpanded) ? storedExpanded : []);
-
-        fetchDirectoryStructure();
-    }, [dispatch, render, projectId]);
-
-    // Fetch directory structure from backend
-    const fetchDirectoryStructure = async () => {
-        if (!projectId) return;
-        setIsDirectoryLoading(true);
-        try {
-            const data =
-                await apiService.matflow.dataset.getAllFiles(projectId);
-            const sanitized = sanitizeDirectoryStructure(data);
-            setDirectoryStructure(sanitized);
-            if (
-                activeFolder &&
-                LEGACY_ROOT_OUTPUT_KEYS.has(
-                    String(activeFolder.split("/")[0] || "").trim(),
-                )
-            ) {
-                setActiveFolder("");
-            }
-        } catch (error) {
-            console.error("Error fetching directory structure:", error);
-        } finally {
-            setIsDirectoryLoading(false);
-        }
-    };
-
-    // Save expandedFolders to localStorage whenever it changes
-    useEffect(() => {
-        if (!projectId) return;
-        sessionSetJson("expandedFolders", projectId, expandedFolders);
-    }, [expandedFolders, projectId]);
-
-    // Save activeFolder to localStorage whenever it changes
-    useEffect(() => {
-        if (!projectId) return;
-        sessionSetString("activeFolder", projectId, activeFolder);
-        dispatch(setActiveFolderAction(activeFolder));
-    }, [activeFolder]);
-
-    // Save activeFileId to localStorage whenever it changes
-    useEffect(() => {
-        dispatch(setActiveFile({ name: fileActiveId }));
-        if (projectId) {
-            sessionSetString("activeFileId", projectId, fileActiveId);
-        }
-        let folder = fileActiveId.split("/");
-        folder = folder.slice(0, folder.length - 1).join("/");
-        dispatch(setActiveFolderAction(folder));
-    }, [fileActiveId, dispatch]);
-
-    const setActiveFolderWithoutToggling = (folder) => {
-        setActiveFolder(folder);
-    };
-
-    const toggleFolderExpansion = (folder) => {
-        setExpandedFolders((prev) => {
-            const isExpanded = prev.includes(folder);
-            if (isExpanded) {
-                return prev.filter((f) => f !== folder);
-            }
-            return [...prev, folder];
-        });
-    };
+    const {
+        uploadedFile,
+        setUploadedFile,
+        newFolderName,
+        setNewFolderName,
+        convertFile,
+        setConvertFile,
+        showConvertModal,
+        setShowConvertModal,
+        showUploadModal,
+        setShowUploadModal,
+        renameTarget,
+        renameValue,
+        setRenameValue,
+        deleteTarget,
+        setDeleteTarget,
+        moveTarget,
+        moveDestination,
+        setMoveDestination,
+        handleDownloadFile,
+        handleDownloadFolder,
+        handleFileChange,
+        handleConvertFileChange,
+        handleCreateFolder,
+        startRename,
+        confirmRename,
+        cancelRename,
+        confirmDelete,
+        closeMoveModal,
+        confirmMove,
+    } = useFileActions({
+        projectId,
+        activeFolder,
+        setActiveFolder,
+        fileActiveId,
+        setFileActiveId,
+        directoryStructure,
+        fetchDirectoryStructure,
+        navigate,
+        setDisplayProjectName,
+        isReservedSystemFolderPath,
+    });
 
     const getFileIcon = (fileName) => {
         const fileExtension = fileName.split(".").pop().toLowerCase();
@@ -178,112 +112,9 @@ function FileTab({ projectId, projectName }) {
         return <FileText size={15} className="text-[#0D9488]" />;
     };
 
-    const handleFileSelect = (folder, name) => {
-        const fullPath = `${folder}/${name}`.replace(/\\/g, "/").toLowerCase();
-        const modelExtensions = [".joblib", ".pkl", ".pth", ".pt"];
-        const isModelFile =
-            fullPath.includes("/output/models/") ||
-            modelExtensions.some((ext) => fullPath.endsWith(ext));
-        const nextFunction = isModelFile
-            ? "Materials Property Prediction"
-            : "Dataset Preview";
-
-        // Set the file immediately so the sidebar highlights at once.
-        // Jump straight to "Materials Property Preview" so DatasetDisplay renders its
-        // paginated preview without waiting for the full CSV load in DashBoardRight.
-        setFileActiveId(`${folder}/${name}`);
-        if (projectId) {
-            sessionSetString("activeFunction", projectId, nextFunction);
-        }
-        dispatch(setActiveFunction(nextFunction));
-    };
-
-    const handleDelete = async (folder, file = null) => {
-        try {
-            const deleted = await apiService.matflow.dataset.delete(
-                projectId,
-                folder,
-                file,
-            );
-
-            if (deleted) {
-                toast.success(
-                    `${file ? "File" : "Folder"} deleted successfully!`,
-                );
-                if (file) {
-                    await deleteIndexedDB(`${folder}/${file}`);
-                }
-                await syncSplitAndModelCache(projectId).catch(() => null);
-                fetchDirectoryStructure(); // Refresh directory structure
-            } else {
-                throw new Error("Failed to delete item");
-            }
-        } catch (error) {
-            toast.error(`Error deleting ${file ? "file" : "folder"}`);
-        }
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setUploadedFile(file);
-            setShowUploadModal(true);
-        }
-    };
-
-    const handleConvertFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setConvertFile(file);
-            setShowConvertModal(true);
-        }
-    };
-
     const handleConvertClick = () => {
         // Trigger file input - modal will open after file is selected
         convertInputRef.current?.click();
-    };
-
-    const handleCreateFolder = async () => {
-        const trimmedFolderName = newFolderName.trim();
-        if (!trimmedFolderName) {
-            toast.warning("Please enter a folder name before creating.");
-            return;
-        }
-
-        try {
-            const created = await apiService.matflow.dataset.createFolder(
-                projectId,
-                trimmedFolderName,
-                activeFolder || "",
-            );
-            const createdFolderName = created?.folder_name || trimmedFolderName;
-            if (created?.renamed || createdFolderName !== trimmedFolderName) {
-                toast.info(
-                    `Folder already exists. Created as "${createdFolderName}".`,
-                );
-            } else {
-                toast.success("Folder created successfully!");
-            }
-            setNewFolderName("");
-            fetchDirectoryStructure();
-        } catch (error) {
-            const msg =
-                error?.data?.error || error?.data?.detail || error?.message;
-            const isAuthError =
-                typeof msg === "string" &&
-                /auth|credentials|login|unauthorized/i.test(msg);
-            toast.error(
-                isAuthError
-                    ? "Please log in to create a folder."
-                    : msg || "Error creating folder!",
-            );
-        }
-    };
-
-    // Function to clear active folder
-    const clearActiveFolder = () => {
-        setActiveFolder("");
     };
 
     useEffect(() => {
@@ -297,205 +128,6 @@ function FileTab({ projectId, projectName }) {
         }
     }, [renameTarget]);
 
-    const startRename = (name, parentFolder, type) => {
-        setRenameTarget({ name, parentFolder, type });
-        setRenameValue(name);
-    };
-
-    const confirmRename = async () => {
-        if (!renameTarget) return;
-        const { name, parentFolder, type } = renameTarget;
-        if (renameValue.trim() && renameValue !== name) {
-            if (type === "project") {
-                await handleProjectRename(renameValue.trim());
-            } else {
-                await handleRename(name, renameValue.trim(), parentFolder);
-            }
-        }
-        setRenameTarget(null);
-        setRenameValue("");
-    };
-
-    const cancelRename = () => {
-        setRenameTarget(null);
-        setRenameValue("");
-    };
-
-    const confirmDelete = async () => {
-        if (!deleteTarget) return;
-        if (deleteTarget.type === "project") {
-            await handleProjectDelete();
-        } else {
-            await handleDelete(deleteTarget.folder, deleteTarget.file || null);
-        }
-        setDeleteTarget(null);
-    };
-
-    const startMove = (name, parentFolder, type) => {
-        const sourcePath = parentFolder ? `${parentFolder}/${name}` : name;
-        const workspaceRoot = getWorkspaceRootFromPath(sourcePath);
-        setMoveTarget({ type, name, parentFolder, sourcePath });
-        setMoveDestination(workspaceRoot);
-    };
-
-    const closeMoveModal = () => {
-        setMoveTarget(null);
-        setMoveDestination("");
-    };
-
-    const confirmMove = async () => {
-        if (!moveTarget || !moveDestination) return;
-        try {
-            await apiService.matflow.dataset.move(
-                projectId,
-                moveTarget.sourcePath,
-                moveDestination,
-            );
-
-            // Clear stale selection references if they were inside moved folder/file.
-            const sourcePath = moveTarget.sourcePath;
-            if (moveTarget.type === "file" && fileActiveId === sourcePath) {
-                setFileActiveId("");
-            }
-            if (moveTarget.type === "folder") {
-                if (
-                    activeFolder === sourcePath ||
-                    activeFolder.startsWith(`${sourcePath}/`)
-                ) {
-                    setActiveFolder("");
-                }
-                if (
-                    fileActiveId === sourcePath ||
-                    fileActiveId.startsWith(`${sourcePath}/`)
-                ) {
-                    setFileActiveId("");
-                }
-            }
-
-            toast.success("Moved successfully!");
-            closeMoveModal();
-            fetchDirectoryStructure();
-        } catch (error) {
-            const msg =
-                error?.data?.error || error?.data?.detail || error?.message;
-            toast.error(msg || "Error moving item!");
-        }
-    };
-
-    const handleProjectRename = async (newName) => {
-        if (!newName?.trim()) {
-            toast.error("Project name cannot be empty!");
-            return;
-        }
-
-        try {
-            await commonApi.projects.update(projectId, {
-                name: newName.trim(),
-            });
-            setDisplayProjectName(newName.trim());
-            toast.success("Project renamed successfully!");
-        } catch (error) {
-            const msg =
-                error?.data?.error || error?.data?.detail || error?.message;
-            toast.error(msg || "Error renaming project!");
-        }
-    };
-
-    const handleProjectDelete = async () => {
-        try {
-            await commonApi.projects.remove(projectId);
-            try {
-                await clearIndexedDB(`models:${projectId}`);
-                await clearIndexedDB(`splitted_dataset:${projectId}`);
-            } catch (_) {}
-            toast.success("Project deleted successfully!");
-            navigate("/matflow/dashboard");
-        } catch (error) {
-            const msg =
-                error?.data?.error || error?.data?.detail || error?.message;
-            toast.error(msg || "Error deleting project!");
-        }
-    };
-
-    const handleRename = async (currentName, newName, parentFolder = "") => {
-        if (!newName.trim()) {
-            toast.error("Name cannot be empty!");
-            return;
-        }
-
-        try {
-            await apiService.matflow.dataset.rename(
-                projectId,
-                currentName,
-                newName,
-                parentFolder,
-            );
-
-            toast.success("Renamed successfully!");
-            fetchDirectoryStructure(); // Refresh the directory structure
-        } catch (error) {
-            toast.error("Error renaming item!");
-        }
-    };
-
-    const filterDirectoryStructure = (structure, query) => {
-        if (!query) return structure;
-        const loweredQuery = query.toLowerCase();
-
-        const walk = (node) => {
-            const result = {};
-            const directFiles = Array.isArray(node.files) ? node.files : [];
-
-            const matchedFiles = directFiles.filter((fileName) =>
-                String(fileName).toLowerCase().includes(loweredQuery),
-            );
-
-            if (matchedFiles.length > 0) {
-                result.files = matchedFiles;
-            }
-
-            Object.keys(node).forEach((key) => {
-                if (key === "files") return;
-                const child = node[key];
-                if (!child || typeof child !== "object" || Array.isArray(child))
-                    return;
-
-                const folderMatches = key.toLowerCase().includes(loweredQuery);
-                if (folderMatches) {
-                    result[key] = child;
-                    return;
-                }
-
-                const filteredChild = walk(child);
-                if (Object.keys(filteredChild).length > 0) {
-                    result[key] = filteredChild;
-                }
-            });
-
-            return result;
-        };
-
-        return walk(structure);
-    };
-
-    const collectFolderPaths = (structure, parentPath = "") => {
-        let paths = [];
-        Object.keys(structure || {}).forEach((key) => {
-            if (key === "files") return;
-            const childPath = parentPath ? `${parentPath}/${key}` : key;
-            paths.push(childPath);
-            paths = paths.concat(collectFolderPaths(structure[key], childPath));
-        });
-        return paths;
-    };
-
-    const getWorkspaceRootFromPath = (pathValue) => {
-        const normalized = String(pathValue || "")
-            .replace(/\\/g, "/")
-            .trim();
-        if (!normalized) return "";
-        return normalized.split("/")[0] || "";
-    };
 
     const getMoveDestinationOptions = () => {
         if (!moveTarget) return [];
@@ -531,328 +163,16 @@ function FileTab({ projectId, projectName }) {
         });
     };
 
-    const renderFolderStructure = (structure, parentFolder = "", depth = 0) => {
-        return Object.keys(structure).map((key) => {
-            if (key === "files") {
-                return structure[key].map((file) => {
-                    const isFileActive =
-                        fileActiveId === `${parentFolder}/${file}`;
-                    const indent = depth * 14 + 10;
-                    return (
-                        <div
-                            key={`${parentFolder}/${file}`}
-                            style={{ paddingLeft: `${indent}px` }}
-                            onClick={(e) => e.stopPropagation()}
-                            className={`flex cursor-pointer items-center group justify-between mt-2 pr-2 py-2 rounded-lg transition-all duration-200 ${
-                                isFileActive
-                                    ? "bg-[#E6F7F5] text-gray-800 ring-1 ring-[#0D9488]/20"
-                                    : "text-gray-700 hover:bg-gray-100"
-                            }`}
-                        >
-                            {renameTarget &&
-                            renameTarget.name === file &&
-                            renameTarget.parentFolder === parentFolder &&
-                            renameTarget.type === "file" ? (
-                                <div
-                                    className="flex flex-1 min-w-0 items-center gap-1"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <input
-                                        ref={renameInputRef}
-                                        type="text"
-                                        value={renameValue}
-                                        onChange={(e) =>
-                                            setRenameValue(e.target.value)
-                                        }
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter")
-                                                confirmRename();
-                                            if (e.key === "Escape")
-                                                cancelRename();
-                                        }}
-                                        onBlur={confirmRename}
-                                        className="flex-1 min-w-0 text-sm px-1.5 py-0.5 border border-[#0D9488] rounded outline-none bg-white text-gray-800"
-                                    />
-                                </div>
-                            ) : (
-                                <>
-                                    <div
-                                        className={`flex flex-1 min-w-0 tracking-wide gap-2 items-center transition-all cursor-pointer ${
-                                            isFileActive
-                                                ? "font-semibold"
-                                                : "font-normal"
-                                        }`}
-                                        onClick={() =>
-                                            handleFileSelect(parentFolder, file)
-                                        }
-                                    >
-                                        <span className="flex-shrink-0">
-                                            {getFileIcon(file)}
-                                        </span>
-                                        <span
-                                            className="truncate text-sm"
-                                            title={file}
-                                        >
-                                            {file}
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-1.5 flex-shrink-0 items-center ml-2">
-                                        {ENABLE_MOVE_UI && (
-                                            <button
-                                                className="w-6 h-6 rounded border border-indigo-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-indigo-50 text-indigo-600"
-                                                title="Move file"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    startMove(
-                                                        file,
-                                                        parentFolder,
-                                                        "file",
-                                                    );
-                                                }}
-                                            >
-                                                <MdDriveFileMove size={13} />
-                                            </button>
-                                        )}
-                                        <button
-                                            className="w-6 h-6 rounded border border-blue-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-blue-50 text-blue-500"
-                                            title="Rename"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                startRename(
-                                                    file,
-                                                    parentFolder,
-                                                    "file",
-                                                );
-                                            }}
-                                        >
-                                            <Pencil size={12} />
-                                        </button>
-                                        <button
-                                            className="w-6 h-6 rounded border border-red-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-red-50 text-red-500"
-                                            title="Delete"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeleteTarget({
-                                                    folder: parentFolder,
-                                                    file,
-                                                    displayName: file,
-                                                });
-                                            }}
-                                        >
-                                            <Trash2 size={12} />
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    );
-                });
-            } else {
-                const newParentFolder = parentFolder
-                    ? `${parentFolder}/${key}`
-                    : key;
-                const isExpanded = expandedFolders.includes(newParentFolder);
-                const isSelectedFolder = activeFolder === newParentFolder;
-                const isActive = isSelectedFolder && !fileActiveId;
-                const indent = depth * 14 + 8;
-
-                return (
-                    <div key={newParentFolder} className="relative">
-                        <div
-                            style={{ paddingLeft: `${indent}px` }}
-                            onClick={(e) => e.stopPropagation()}
-                            className={`flex items-center justify-between cursor-pointer group mt-2 pr-2 py-2 rounded-lg transition-all duration-200 ${
-                                isActive
-                                    ? "bg-[#E6F7F5] text-gray-800 ring-1 ring-[#0D9488]/20"
-                                    : isSelectedFolder
-                                      ? "bg-white text-gray-800 ring-1 ring-[#0D9488]/35"
-                                      : "hover:bg-gray-100"
-                            }`}
-                        >
-                            <div
-                                className={`flex items-center gap-2 flex-1 min-w-0 ${
-                                    isExpanded
-                                        ? isActive
-                                            ? "text-gray-800"
-                                            : "text-gray-700"
-                                        : isActive
-                                          ? "text-gray-800"
-                                          : "text-gray-600"
-                                } ${isActive ? "font-semibold" : "font-normal"}`}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveFolderWithoutToggling(
-                                        newParentFolder,
-                                    );
-                                    toggleFolderExpansion(newParentFolder);
-                                }}
-                            >
-                                <span className="inline-flex items-center gap-1.5">
-                                    {isExpanded ? (
-                                        <IoIosArrowDown
-                                            className={`flex-shrink-0 transition-colors ${
-                                                isActive
-                                                    ? "text-[#0D9488]"
-                                                    : "text-gray-500"
-                                            }`}
-                                        />
-                                    ) : (
-                                        <IoIosArrowForward
-                                            className={`flex-shrink-0 transition-colors ${
-                                                isActive
-                                                    ? "text-[#0D9488]"
-                                                    : "text-gray-500"
-                                            }`}
-                                        />
-                                    )}
-                                    <Folder
-                                        size={14}
-                                        className={
-                                            isActive
-                                                ? "text-amber-600"
-                                                : "text-amber-500"
-                                        }
-                                    />
-                                </span>
-                                {renameTarget &&
-                                renameTarget.name === key &&
-                                renameTarget.parentFolder === parentFolder &&
-                                renameTarget.type === "folder" ? (
-                                    <div
-                                        className="flex-1 min-w-0"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <input
-                                            ref={renameInputRef}
-                                            type="text"
-                                            value={renameValue}
-                                            onChange={(e) =>
-                                                setRenameValue(e.target.value)
-                                            }
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter")
-                                                    confirmRename();
-                                                if (e.key === "Escape")
-                                                    cancelRename();
-                                            }}
-                                            onBlur={confirmRename}
-                                            className="w-full text-sm px-1.5 py-0.5 border border-[#0D9488] rounded outline-none bg-white text-gray-800"
-                                        />
-                                    </div>
-                                ) : (
-                                    <span
-                                        className="truncate text-sm flex items-center gap-1.5"
-                                        title={key}
-                                    >
-                                        {isSelectedFolder && (
-                                            <span className="mx-0.5 h-1 w-1 rounded-full bg-[#14B8A6] ring-1 ring-[#99F6E4] flex-shrink-0" />
-                                        )}
-                                        <span className="truncate">{key}</span>
-                                    </span>
-                                )}
-                            </div>
-                            {!(
-                                renameTarget &&
-                                renameTarget.name === key &&
-                                renameTarget.parentFolder === parentFolder &&
-                                renameTarget.type === "folder"
-                            ) && (
-                                <div className="flex gap-1.5 flex-shrink-0 items-center ml-2">
-                                    <button
-                                        className="w-6 h-6 rounded border border-emerald-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-emerald-50 text-emerald-600"
-                                        title="Upload dataset here"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolder(newParentFolder);
-                                            setTimeout(
-                                                () => inputRef.current?.click(),
-                                                0,
-                                            );
-                                        }}
-                                    >
-                                        <Upload size={12} />
-                                    </button>
-                                    <button
-                                        className="w-6 h-6 rounded border border-amber-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-amber-50 text-amber-600"
-                                        title="Dataset format conversion"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolder(newParentFolder);
-                                            setTimeout(
-                                                () =>
-                                                    convertInputRef.current?.click(),
-                                                0,
-                                            );
-                                        }}
-                                    >
-                                        <ArrowLeftRight size={12} />
-                                    </button>
-                                    {ENABLE_MOVE_UI && (
-                                        <button
-                                            className="w-6 h-6 rounded border border-indigo-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-indigo-50 text-indigo-600"
-                                            title="Move folder"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                startMove(
-                                                    key,
-                                                    parentFolder,
-                                                    "folder",
-                                                );
-                                            }}
-                                        >
-                                            <MdDriveFileMove size={13} />
-                                        </button>
-                                    )}
-                                    <button
-                                        className="w-6 h-6 rounded border border-blue-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-blue-50 text-blue-500"
-                                        title="Rename folder"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            startRename(
-                                                key,
-                                                parentFolder,
-                                                "folder",
-                                            );
-                                        }}
-                                    >
-                                        <Pencil size={12} />
-                                    </button>
-                                    <button
-                                        className="w-6 h-6 rounded border border-red-300 bg-white flex items-center justify-center transition-all hover:scale-110 hover:bg-red-50 text-red-500"
-                                        title="Delete folder"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setDeleteTarget({
-                                                folder: newParentFolder,
-                                                file: null,
-                                                displayName: key,
-                                            });
-                                        }}
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                        {isExpanded && (
-                            <div className="ml-4 border-l border-gray-300/80">
-                                {renderFolderStructure(
-                                    structure[key],
-                                    newParentFolder,
-                                    depth + 1,
-                                )}
-                            </div>
-                        )}
-                    </div>
-                );
-            }
-        });
-    };
-
     const hasProjectSelected = Boolean(projectId);
     const hasDirectoryContent =
         directoryStructure && Object.keys(directoryStructure).length > 0;
     const rootLabel = displayProjectName || "Project Files";
+    const selectedFolderName = activeFolder
+        ? activeFolder.split("/").filter(Boolean).pop() || rootLabel
+        : rootLabel;
+    const selectedDirectoryLabel = activeFolder
+        ? formatFolderDisplayName(selectedFolderName)
+        : rootLabel;
     const isProjectRootSelected = !activeFolder && !fileActiveId;
     const trimmedSearchQuery = directorySearchQuery.trim();
     const filteredDirectoryStructure = trimmedSearchQuery
@@ -861,6 +181,40 @@ function FileTab({ projectId, projectName }) {
     const hasFilteredResults =
         filteredDirectoryStructure &&
         Object.keys(filteredDirectoryStructure).length > 0;
+
+    const getFolderActionConfig = (folderPath) => {
+        if (isReservedSystemFolderPath(folderPath)) {
+            return {
+                canDownload: true,
+                canRename: false,
+                canDelete: false,
+            };
+        }
+        return {
+            canDownload: true,
+            canRename: true,
+            canDelete: true,
+        };
+    };
+
+    const isOutputPath = (folderPath) => {
+        const normalized = String(folderPath || "")
+            .replace(/\\/g, "/")
+            .toLowerCase();
+        const workspaceRelative = getWorkspaceRelativeFolderPath(folderPath);
+        return (
+            normalized === "output" ||
+            normalized.startsWith("output/") ||
+            workspaceRelative === "output" ||
+            workspaceRelative.startsWith("output/")
+        );
+    };
+
+    const getFileActionConfig = (folderPath) => ({
+        canDownload: true,
+        canRename: true,
+        canDelete: isOutputPath(folderPath),
+    });
 
     useEffect(() => {
         if (!trimmedSearchQuery) return;
@@ -892,158 +246,82 @@ function FileTab({ projectId, projectName }) {
                     </p>
                 ) : (
                     <div className="h-full min-h-0 flex flex-col">
-                        <div
-                            className={`group w-full flex items-center gap-2 px-2.5 py-2.5 cursor-pointer transition-colors duration-150 shadow-[0_2px_6px_-5px_rgba(15,23,42,0.45)] ${
-                                isProjectRootSelected
-                                    ? "bg-[#E6F7F5] text-[#0F766E]"
-                                    : "bg-transparent text-gray-800 hover:bg-[#F5FAF9]"
-                            }`}
-                            onClick={() => {
-                                setFileActiveId("");
-                                setActiveFolder("");
+                        <FileTabHeader
+                            isProjectRootSelected={isProjectRootSelected}
+                            renameTarget={renameTarget}
+                            renameValue={renameValue}
+                            renameInputRef={renameInputRef}
+                            onRenameValueChange={setRenameValue}
+                            onConfirmRename={confirmRename}
+                            onCancelRename={cancelRename}
+                            displayProjectName={displayProjectName}
+                            showSearchInput={showSearchInput}
+                            directorySearchQuery={directorySearchQuery}
+                            onToggleSearch={(e) => {
+                                e.stopPropagation();
+                                setShowSearchInput((prev) => !prev);
+                                if (showSearchInput) setDirectorySearchQuery("");
                             }}
-                        >
-                            <FolderOpen
-                                size={14}
-                                className={
-                                    isProjectRootSelected
-                                        ? "text-[#0F766E]"
-                                        : "text-[#0D9488]"
-                                }
-                            />
-                            {renameTarget && renameTarget.type === "project" ? (
-                                <input
-                                    ref={renameInputRef}
-                                    type="text"
-                                    value={renameValue}
-                                    onChange={(e) =>
-                                        setRenameValue(e.target.value)
-                                    }
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") confirmRename();
-                                        if (e.key === "Escape") cancelRename();
-                                    }}
-                                    onBlur={confirmRename}
-                                    className="flex-1 min-w-0 bg-white text-gray-700 text-sm border border-gray-300 rounded px-2 py-1 outline-none focus:border-[#0D9488]"
-                                />
-                            ) : (
-                                <span
-                                    className={`flex-1 text-sm truncate ${
-                                        isProjectRootSelected
-                                            ? "font-bold text-[#0F766E]"
-                                            : "font-semibold text-gray-800"
-                                    }`}
-                                    title={displayProjectName}
-                                >
-                                    {displayProjectName}
-                                </span>
-                            )}
-                            {!(
-                                renameTarget && renameTarget.type === "project"
-                            ) && (
-                                <div className="ml-auto flex items-center gap-1.5">
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowSearchInput((prev) => !prev);
-                                            if (showSearchInput)
-                                                setDirectorySearchQuery("");
-                                        }}
-                                        className="w-7 h-7 rounded border border-amber-300 bg-white hover:bg-amber-50 text-amber-600 flex items-center justify-center transition-all hover:scale-110"
-                                        title="Search in project directory"
-                                    >
-                                        <Search size={14} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolder("");
-                                            inputRef.current?.click();
-                                        }}
-                                        className="w-7 h-7 rounded border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-600 flex items-center justify-center transition-all hover:scale-110"
-                                        title="Upload dataset to project root"
-                                    >
-                                        <Upload size={14} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveFolder("");
-                                            handleConvertClick();
-                                        }}
-                                        className="w-7 h-7 rounded border border-amber-300 bg-white hover:bg-amber-50 text-amber-600 flex items-center justify-center transition-all hover:scale-110"
-                                        title="Convert dataset in project root"
-                                    >
-                                        <ArrowLeftRight size={14} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            startRename(
-                                                displayProjectName,
-                                                "",
-                                                "project",
-                                            );
-                                        }}
-                                        className="w-7 h-7 rounded border border-blue-300 bg-white hover:bg-blue-50 text-blue-600 flex items-center justify-center transition-all hover:scale-110"
-                                        title="Rename project"
-                                    >
-                                        <Pencil size={14} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setDeleteTarget({
-                                                type: "project",
-                                                displayName: displayProjectName,
-                                            });
-                                        }}
-                                        className="w-7 h-7 rounded border border-red-300 bg-white hover:bg-red-50 text-red-500 flex items-center justify-center transition-all hover:scale-110"
-                                        title="Delete project"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                        {showSearchInput && (
-                            <div
-                                className="mt-2 flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1.5"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <Search size={14} className="text-gray-400" />
-                                <input
-                                    type="text"
-                                    value={directorySearchQuery}
-                                    onChange={(e) =>
-                                        setDirectorySearchQuery(e.target.value)
-                                    }
-                                    placeholder="Search files, charts, folders..."
-                                    className="flex-1 min-w-0 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
-                                    autoFocus
-                                />
-                                {directorySearchQuery && (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setDirectorySearchQuery("")
-                                        }
-                                        className="p-1 rounded hover:bg-gray-100 text-gray-500"
-                                        title="Clear search"
-                                    >
-                                        <X size={12} />
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                            onSearchChange={setDirectorySearchQuery}
+                            onClearSearch={() => setDirectorySearchQuery("")}
+                            onUploadRoot={(e) => {
+                                e.stopPropagation();
+                                setActiveFolder("");
+                                inputRef.current?.click();
+                            }}
+                            onConvertRoot={(e) => {
+                                e.stopPropagation();
+                                setActiveFolder("");
+                                handleConvertClick();
+                            }}
+                            onStartProjectRename={(e) => {
+                                e.stopPropagation();
+                                startRename(displayProjectName, "", "project");
+                            }}
+                            onDeleteProject={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget({
+                                    type: "project",
+                                    displayName: displayProjectName,
+                                });
+                            }}
+                        />
                         <div className="mt-1 ml-4 flex-1 min-h-0">
                             {hasDirectoryContent ? (
                                 hasFilteredResults ? (
-                                    renderFolderStructure(
-                                        filteredDirectoryStructure,
-                                        "",
-                                        0,
-                                    )
+                                    <FileTreeView
+                                        structure={filteredDirectoryStructure}
+                                        parentFolder=""
+                                        depth={0}
+                                        fileActiveId={fileActiveId}
+                                        activeFolder={activeFolder}
+                                        expandedFolders={expandedFolders}
+                                        renameTarget={renameTarget}
+                                        renameValue={renameValue}
+                                        renameInputRef={renameInputRef}
+                                        onRenameValueChange={setRenameValue}
+                                        onConfirmRename={confirmRename}
+                                        onCancelRename={cancelRename}
+                                        onFileSelect={handleFileSelect}
+                                        getFileIcon={getFileIcon}
+                                        onDownloadFile={handleDownloadFile}
+                                        onDownloadFolder={handleDownloadFolder}
+                                        onStartRename={startRename}
+                                        onRequestDelete={setDeleteTarget}
+                                        getFolderActionConfig={
+                                            getFolderActionConfig
+                                        }
+                                        getFileActionConfig={getFileActionConfig}
+                                        onSetActiveFolderWithoutToggling={
+                                            setActiveFolderWithoutToggling
+                                        }
+                                        onToggleFolderExpansion={
+                                            toggleFolderExpansion
+                                        }
+                                        formatFolderDisplayName={
+                                            formatFolderDisplayName
+                                        }
+                                    />
                                 ) : (
                                     <p className="mt-3 text-xs text-gray-500">
                                         No files or folders match "
@@ -1063,72 +341,33 @@ function FileTab({ projectId, projectName }) {
             </div>
 
             {/* Bottom toolbar */}
-            <div className="sticky bottom-0 z-10 shrink-0 border-t border-gray-200 bg-gray-50 px-3 py-2.5">
-                <div className="mb-2 px-0.5 flex items-center justify-between">
-                    <span className="text-[11px] uppercase tracking-wider font-semibold text-gray-500">
-                        Selected directory
-                    </span>
-                    <span
-                        className="max-w-[150px] truncate rounded-full bg-[#E6F7F5] px-2 py-0.5 text-[11px] font-medium text-[#0D9488]"
-                        title={activeFolder || rootLabel}
-                    >
-                        {activeFolder || rootLabel}
-                    </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <input
-                        type="text"
-                        placeholder="New folder..."
-                        value={newFolderName}
-                        disabled={!hasProjectSelected}
-                        onChange={(e) => setNewFolderName(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") handleCreateFolder();
-                        }}
-                        className="flex-1 min-w-0 bg-white text-gray-700 text-xs border border-gray-300 rounded px-2 py-1.5 outline-none focus:border-[#0D9488] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
-                    />
-                    <button
-                        disabled={!hasProjectSelected}
-                        onClick={handleCreateFolder}
-                        className="w-7 h-7 rounded border border-[#0D9488]/30 bg-white hover:bg-[#0D9488]/10 text-[#0D9488] flex items-center justify-center transition-all hover:scale-110 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
-                        title="Create folder"
-                    >
-                        <FolderPlus size={14} />
-                    </button>
-                    <button
-                        disabled={!hasProjectSelected}
-                        onClick={() => inputRef.current?.click()}
-                        className="w-7 h-7 rounded border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-600 flex items-center justify-center transition-all hover:scale-110 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
-                        title="Upload CSV file"
-                    >
-                        <Upload size={14} />
-                    </button>
-                    <button
-                        disabled={!hasProjectSelected}
-                        onClick={handleConvertClick}
-                        className="w-7 h-7 rounded border border-amber-300 bg-white hover:bg-amber-50 text-amber-600 flex items-center justify-center transition-all hover:scale-110 disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed"
-                        title="Convert dataset format"
-                    >
-                        <ArrowLeftRight size={14} />
-                    </button>
-                </div>
-                <input
-                    ref={inputRef}
-                    type="file"
-                    id="input-file-upload"
-                    hidden
-                    accept=".csv"
-                    onChange={handleFileChange}
-                />
-                <input
-                    ref={convertInputRef}
-                    type="file"
-                    id="input-file-convert"
-                    hidden
-                    accept=".txt,.xls,.xlsx,.xlsm"
-                    onChange={handleConvertFileChange}
-                />
-            </div>
+            <FileTabBottomToolbar
+                activeFolder={activeFolder}
+                rootLabel={rootLabel}
+                selectedDirectoryLabel={selectedDirectoryLabel}
+                newFolderName={newFolderName}
+                hasProjectSelected={hasProjectSelected}
+                onNewFolderChange={setNewFolderName}
+                onCreateFolder={handleCreateFolder}
+                onUploadClick={() => inputRef.current?.click()}
+                onConvertClick={handleConvertClick}
+            />
+            <input
+                ref={inputRef}
+                type="file"
+                id="input-file-upload"
+                hidden
+                accept=".csv"
+                onChange={handleFileChange}
+            />
+            <input
+                ref={convertInputRef}
+                type="file"
+                id="input-file-convert"
+                hidden
+                accept=".txt,.xls,.xlsx,.xlsm"
+                onChange={handleConvertFileChange}
+            />
 
             <ConfirmDeleteModal
                 isOpen={Boolean(deleteTarget)}
@@ -1480,68 +719,11 @@ function UploadFileModal({
                 )}
 
                 {!loading && !error && csvData.length > 0 && (
-                    <div className="mb-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-                        <h3 className="text-lg font-semibold mb-2 flex-shrink-0">
-                            Preview (First 100 rows)
-                        </h3>
-                        <div className="border border-gray-300 rounded-lg overflow-hidden flex-1 flex flex-col min-h-0">
-                            <div
-                                className="overflow-x-auto overflow-y-auto flex-1"
-                                style={{ maxHeight: "calc(90vh - 300px)" }}
-                            >
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50 sticky top-0">
-                                        <tr>
-                                            {columns.map((col, idx) => (
-                                                <th
-                                                    key={idx}
-                                                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                                                >
-                                                    {col}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {csvData
-                                            .slice(0, 100)
-                                            .map((row, rowIdx) => (
-                                                <tr
-                                                    key={rowIdx}
-                                                    className="hover:bg-gray-50"
-                                                >
-                                                    {columns.map(
-                                                        (col, colIdx) => (
-                                                            <td
-                                                                key={colIdx}
-                                                                className="px-4 py-3 whitespace-nowrap text-sm text-gray-900"
-                                                            >
-                                                                {row[col] !==
-                                                                    null &&
-                                                                row[col] !==
-                                                                    undefined
-                                                                    ? String(
-                                                                          row[
-                                                                              col
-                                                                          ],
-                                                                      )
-                                                                    : ""}
-                                                            </td>
-                                                        ),
-                                                    )}
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {csvData.length > 100 && (
-                                <div className="px-4 py-2 bg-gray-50 text-sm text-gray-600 text-center">
-                                    Showing first 100 rows of {csvData.length}{" "}
-                                    total rows
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <DataPreviewTable
+                        columns={columns}
+                        csvData={csvData}
+                        title="Preview (First 100 rows)"
+                    />
                 )}
 
                 {!loading && !error && csvData.length === 0 && (
@@ -1730,68 +912,11 @@ function ConvertFileModal({
                 )}
 
                 {!loading && !error && csvData.length > 0 && (
-                    <div className="mb-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-                        <h3 className="text-lg font-semibold mb-2 flex-shrink-0">
-                            Preview (CSV Format)
-                        </h3>
-                        <div className="border border-gray-300 rounded-lg overflow-hidden flex-1 flex flex-col min-h-0">
-                            <div
-                                className="overflow-x-auto overflow-y-auto flex-1"
-                                style={{ maxHeight: "calc(90vh - 300px)" }}
-                            >
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50 sticky top-0">
-                                        <tr>
-                                            {columns.map((col, idx) => (
-                                                <th
-                                                    key={idx}
-                                                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                                                >
-                                                    {col}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {csvData
-                                            .slice(0, 100)
-                                            .map((row, rowIdx) => (
-                                                <tr
-                                                    key={rowIdx}
-                                                    className="hover:bg-gray-50"
-                                                >
-                                                    {columns.map(
-                                                        (col, colIdx) => (
-                                                            <td
-                                                                key={colIdx}
-                                                                className="px-4 py-3 whitespace-nowrap text-sm text-gray-900"
-                                                            >
-                                                                {row[col] !==
-                                                                    null &&
-                                                                row[col] !==
-                                                                    undefined
-                                                                    ? String(
-                                                                          row[
-                                                                              col
-                                                                          ],
-                                                                      )
-                                                                    : ""}
-                                                            </td>
-                                                        ),
-                                                    )}
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {csvData.length > 100 && (
-                                <div className="px-4 py-2 bg-gray-50 text-sm text-gray-600 text-center">
-                                    Showing first 100 rows of {csvData.length}{" "}
-                                    total rows
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <DataPreviewTable
+                        columns={columns}
+                        csvData={csvData}
+                        title="Preview (CSV Format)"
+                    />
                 )}
 
                 <div className="flex gap-3 pt-4 flex-shrink-0">

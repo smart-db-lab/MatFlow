@@ -24,6 +24,9 @@ import base64
 import json
 from eda.graph.plotly_theme import apply_modern_theme, MODERN_COLORS
 
+# Maximum character length for feature names and labels in graphs
+MAX_LABEL_LENGTH = 10
+
 def convert_to_native_python(obj):
     """Recursively convert numpy types to native Python types for JSON serialization"""
     if isinstance(obj, np.ndarray):
@@ -99,10 +102,10 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
         # For multiclass, use 'weighted' average to get a single scalar
         avg = multi_average if multi_average else 'weighted'
         metric_dict = {
-            "Accuracy": float(accuracy_score(y, y_pred)),
-            "Precision": float(precision_score(y, y_pred, average=avg)),
-            "Recall": float(recall_score(y, y_pred, average=avg)),
-            "F1-Score": float(f1_score(y, y_pred, average=avg))
+            "Accuracy": f"{float(accuracy_score(y, y_pred)):.4g}",
+            "Precision": f"{float(precision_score(y, y_pred, average=avg)):.4g}",
+            "Recall": f"{float(recall_score(y, y_pred, average=avg)):.4g}",
+            "F1-Score": f"{float(f1_score(y, y_pred, average=avg)):.4g}"
         }
 
         result = metric_dict.get(result_opt)
@@ -111,11 +114,11 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
         result = X.copy().reset_index(drop=True)
         result["Actual"] = pd.Series(y).reset_index(drop=True)
         result["Predicted"] = pd.Series(y_pred).reset_index(drop=True)
-        graph=actvspred(y, y_pred,"Actual vs. Predicted")
+        graph_json = actvspred(y, y_pred,"Actual vs. Predicted")
         result_dict = json.loads(result.to_json(orient="records"))
         obj={
                 "table":result_dict,
-                "graph":graph
+                "graph":[json.loads(graph_json)]
         }
         return JsonResponse(obj, safe=False)
     elif result_opt == "Classification Report":
@@ -124,7 +127,7 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
 
     elif result_opt == "Confusion Matrix":
         cm = confusion_matrix(y, y_pred)
-        labels = [str(l) for l in np.unique(y_pred)]
+        labels = [str(l)[:MAX_LABEL_LENGTH] + ('...' if len(str(l)) > MAX_LABEL_LENGTH else '') for l in np.unique(y_pred)]
         
         # Convert confusion matrix to ECharts heatmap format
         # ECharts expects data as [x, y, value] tuples
@@ -179,7 +182,16 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
                 "realtime": True,
                 "calculable": True,
                 "inRange": {
-                    "color": ["#ffffff", "#fbb4c4", "#ff6384"]
+                    # Light teal scale aligned with Matflow design system
+                    "color": [
+                        "#f8fafc",
+                        "#f0fdfa",
+                        "#ccfbf1",
+                        "#99f6e4",
+                        "#5eead4",
+                        "#2dd4bf",
+                        "#14b8a6",
+                    ]
                 },
                 "textStyle": {"color": "#1f2937"}
             },
@@ -197,7 +209,7 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
                     },
                     "itemStyle": {
                         "borderWidth": 3,
-                        "borderColor": "#ffffff"
+                        "borderColor": "#f1f5f9"
                     }
                 }
             ]
@@ -211,11 +223,29 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
         tbl["Actual"] = pd.Series(y).reset_index(drop=True)
         tbl["Predicted"] = pd.Series(y_pred).reset_index(drop=True)
         x_range = np.arange(len(y))
-        
-        # Convert to ECharts format
-        actual_data = [(int(i), float(val)) for i, val in zip(x_range, y)]
-        predicted_data = [(int(i), float(val)) for i, val in zip(x_range, y_pred)]
-        
+
+        # Use categorical-safe encoding for charting (works for string labels like Iris-setosa)
+        chart_encoder = LabelEncoder()
+        combined_labels = pd.concat(
+            [pd.Series(y).astype(str), pd.Series(y_pred).astype(str)],
+            ignore_index=True,
+        )
+        chart_encoder.fit(combined_labels)
+        # Truncate class labels to MAX_LABEL_LENGTH characters for readability
+        class_labels = [str(c)[:MAX_LABEL_LENGTH] + ('...' if len(str(c)) > MAX_LABEL_LENGTH else '') for c in chart_encoder.classes_]
+        y_chart = chart_encoder.transform(pd.Series(y).astype(str))
+        y_pred_chart = chart_encoder.transform(pd.Series(y_pred).astype(str))
+
+        # Keep x numeric and y as category labels for readable axis labels
+        actual_data = [
+            [int(i), class_labels[int(v)]]
+            for i, v in zip(x_range, y_chart)
+        ]
+        predicted_data = [
+            [int(i), class_labels[int(v)]]
+            for i, v in zip(x_range, y_pred_chart)
+        ]
+
         option = {
             "backgroundColor": "#ffffff",
             "title": {
@@ -246,8 +276,9 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
                 "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
             },
             "yAxis": {
-                "type": "value",
-                "name": "Class Value",
+                "type": "category",
+                "name": "Class Label",
+                "data": class_labels,
                 "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
                 "axisLabel": {"color": "#1f2937", "fontSize": 11},
                 "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
@@ -286,75 +317,101 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
         return JsonResponse({'table': json.loads(tbl.to_json(orient='records')), 'graph': [option]})
 
     elif result_opt == "Precision-Recall Curve":
-        if y.nunique() > 2:
-            return JsonResponse({'error': 'Precision-Recall curve is not supported for multiclass classification'})
-        else:
-            y_encoded = le.fit_transform(y)
-            y_pred_encoded = le.transform(y_pred)
-            precision, recall, _ = precision_recall_curve(y_encoded.ravel(), y_pred_encoded.ravel())
-            ap = average_precision_score(y_encoded, y_pred_encoded)
+        # Build robust label space from both actual and predicted labels
+        y_str = pd.Series(y).astype(str)
+        y_pred_str = pd.Series(y_pred).astype(str)
+        label_encoder = LabelEncoder()
+        label_encoder.fit(pd.concat([y_str, y_pred_str], ignore_index=True))
+        labels = [str(l)[:MAX_LABEL_LENGTH] + ('...' if len(str(l)) > MAX_LABEL_LENGTH else '') for l in label_encoder.classes_]
+        y_encoded = label_encoder.transform(y_str)
+        y_pred_encoded = label_encoder.transform(y_pred_str)
 
-            # Prepare data for ECharts
+        if len(labels) < 2:
+            return JsonResponse({'error': 'Precision-Recall curve requires at least two classes.'})
+
+        # One-vs-rest PR curves (supports both binary and multiclass)
+        y_true_bin = label_binarize(y_encoded, classes=np.arange(len(labels)))
+        y_pred_bin = label_binarize(y_pred_encoded, classes=np.arange(len(labels)))
+        if y_true_bin.ndim == 1:
+            y_true_bin = y_true_bin.reshape(-1, 1)
+            y_pred_bin = y_pred_bin.reshape(-1, 1)
+
+        series = []
+        ap_scores = []
+        colors = ["#0D9488", "#2dd4bf", "#0F766E", "#5EEAD4", "#14b8a6", "#99f6e4"]
+        for idx, cls_label in enumerate(labels):
+            # Skip classes that are absent in ground truth in this slice
+            if np.unique(y_true_bin[:, idx]).size < 2:
+                continue
+            precision, recall, _ = precision_recall_curve(
+                y_true_bin[:, idx], y_pred_bin[:, idx]
+            )
+            ap = average_precision_score(y_true_bin[:, idx], y_pred_bin[:, idx])
+            ap_scores.append(float(ap))
             curve_data = [[float(r), float(p)] for r, p in zip(recall, precision)]
-            
-            option = {
-                "backgroundColor": "#ffffff",
-                "title": {
-                    "text": f"Precision-Recall Curve (AP={ap:.3f})",
-                    "left": "center",
-                    "top": 12,
-                    "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
-                },
-                "tooltip": {
-                    "trigger": "axis",
-                    "textStyle": {"color": "#1f2937", "fontSize": 12},
-                    "backgroundColor": "rgba(255,255,255,0.9)",
-                    "borderColor": "#e5e7eb"
-                },
-                "grid": {
-                    "top": "15%",
-                    "bottom": "12%",
-                    "left": "8%",
-                    "right": "4%",
-                    "containLabel": True
-                },
-                "xAxis": {
-                    "type": "value",
-                    "name": "Recall",
-                    "min": 0,
-                    "max": 1.02,
-                    "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
-                    "axisLabel": {"color": "#1f2937", "fontSize": 11},
-                    "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
-                },
-                "yAxis": {
-                    "type": "value",
-                    "name": "Precision",
-                    "min": 0,
-                    "max": 1.05,
-                    "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
-                    "axisLabel": {"color": "#1f2937", "fontSize": 11},
-                    "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
-                },
-                "legend": {
-                    "orient": "horizontal",
-                    "bottom": "0%",
-                    "left": "center",
-                    "textStyle": {"color": "#374151", "fontSize": 12}
-                },
-                "series": [
-                    {
-                        "name": "PR Curve",
-                        "type": "line",
-                        "data": curve_data,
-                        "smooth": True,
-                        "lineStyle": {"color": "#ff6384", "width": 2.5},
-                        "itemStyle": {"color": "#ff6384"},
-                        "areaStyle": {"color": "rgba(255, 99, 132, 0.15)"}
-                    }
-                ]
-            }
-            return JsonResponse({'graph': [convert_to_native_python(option)]})
+            color = colors[idx % len(colors)]
+            series.append({
+                "name": f"{cls_label} (AP={ap:.4g})",
+                "type": "line",
+                "data": curve_data,
+                "smooth": True,
+                "lineStyle": {"color": color, "width": 2.3},
+                "itemStyle": {"color": color},
+                "areaStyle": {"color": "rgba(13, 148, 136, 0.08)"},
+            })
+
+        if not series:
+            return JsonResponse({'error': 'Unable to compute Precision-Recall curve for the selected data.'})
+
+        macro_ap = float(np.mean(ap_scores)) if ap_scores else 0.0
+        option = {
+            "backgroundColor": "#ffffff",
+            "title": {
+                "text": f"Precision-Recall Curve (mAP={macro_ap:.3f})",
+                "left": "center",
+                "top": 12,
+                "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+            },
+            "tooltip": {
+                "trigger": "axis",
+                "textStyle": {"color": "#1f2937", "fontSize": 12},
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "borderColor": "#e5e7eb"
+            },
+            "grid": {
+                "top": "15%",
+                "bottom": "12%",
+                "left": "8%",
+                "right": "4%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "value",
+                "name": "Recall",
+                "min": 0,
+                "max": 1.02,
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "yAxis": {
+                "type": "value",
+                "name": "Precision",
+                "min": 0,
+                "max": 1.05,
+                "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+                "axisLabel": {"color": "#1f2937", "fontSize": 11},
+                "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+            },
+            "legend": {
+                "orient": "horizontal",
+                "bottom": "0%",
+                "left": "center",
+                "textStyle": {"color": "#374151", "fontSize": 11}
+            },
+            "series": series,
+        }
+        return JsonResponse({'graph': [convert_to_native_python(option)]})
 
     elif result_opt == "ROC Curve":
         # Determine number of unique classes in actual values
@@ -410,14 +467,17 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
             tpr = {}
             roc_auc = dict()
             n_class = classes.shape[0]
-            for i in range(n_class):
+            # Ensure we don't access indices beyond what pred_prob has
+            n_pred_classes = pred_prob.shape[1]
+            n_class_to_process = min(n_class, n_pred_classes)
+            for i in range(n_class_to_process):
                 fpr[i], tpr[i], _ = roc_curve(y_test_binarized[:, i], pred_prob[:, i])
                 roc_auc[i] = auc(fpr[i], tpr[i])
             
             series_data = []
             colors = ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40', '#c9cbcf', '#7dd3fc', '#f0abfc', '#6ee7b7']
             
-            for i in range(n_class):
+            for i in range(n_class_to_process):
                 curve_data = [[float(f), float(t)] for f, t in zip(fpr[i], tpr[i])]  # Ensure native Python float
                 roc_auc_val = float(roc_auc[i]) if hasattr(roc_auc[i], '__float__') else roc_auc[i]  # Convert to native float
                 # Handle NaN in AUC
@@ -425,8 +485,10 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
                     auc_str = "nan"
                 else:
                     auc_str = f"{roc_auc_val:.3f}"
+                # Truncate class name to MAX_LABEL_LENGTH
+                class_name = str(classes[i])[:MAX_LABEL_LENGTH] + ('...' if len(str(classes[i])) > MAX_LABEL_LENGTH else '')
                 series_data.append({
-                    "name": f"{classes[i]} vs Rest (AUC={auc_str})",
+                    "name": f"{class_name} vs Rest (AUC={auc_str})",
                     "type": "line",
                     "data": curve_data,
                     "smooth": True,
@@ -444,6 +506,7 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
             })
             
             option = {
+                "responsive": True,
                 "backgroundColor": "#ffffff",
                 "title": {
                     "text": "Multiclass ROC Curve",
@@ -504,6 +567,7 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
             if len(np.unique(y_encoded)) < 2 or len(np.unique(y_pred_encoded)) < 2:
                 # Return empty graph with message
                 option = {
+                    "responsive": True,
                     "backgroundColor": "#ffffff",
                     "title": {
                         "text": "ROC Curve - Insufficient Classes",
@@ -528,6 +592,7 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
             # Check if AUC is NaN (can happen if predictions are identical)
             if np.isnan(roc_auc_val):
                 option = {
+                    "responsive": True,
                     "backgroundColor": "#ffffff",
                     "title": {
                         "text": "ROC Curve - Unable to Calculate",
@@ -555,6 +620,7 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
                 auc_str = f"{roc_auc_val:.3f}"
             
             option = {
+                "responsive": True,
                 "backgroundColor": "#ffffff",
                 "title": {
                     "text": f"ROC Curve (AUC={auc_str})",
@@ -623,6 +689,8 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
     elif result_opt == "Class-wise Metrics":
         report = classification_report(y, y_pred, output_dict=True)
         class_names = [k for k in report.keys() if k not in ('accuracy', 'macro avg', 'weighted avg')]
+        # Truncate class names to MAX_LABEL_LENGTH
+        class_names_truncated = [str(c)[:MAX_LABEL_LENGTH] + ('...' if len(str(c)) > MAX_LABEL_LENGTH else '') for c in class_names]
         metrics = ['precision', 'recall', 'f1-score']
         
         # Convert to ECharts bar chart
@@ -669,7 +737,7 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
             },
             "xAxis": {
                 "type": "category",
-                "data": class_names,
+                "data": class_names_truncated,
                 "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
                 "axisLabel": {"color": "#1f2937", "fontSize": 11},
                 "splitLine": {"show": False}
@@ -695,21 +763,79 @@ def show_result(y, y_pred, result_opt, multi_average, X, model_name):
         return JsonResponse({'graph': [convert_to_native_python(option)]})
 
 def actvspred(y, y_pred, graph_header):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=list(range(len(y))), y=y, mode='lines+markers', name='Actual',
-        line=dict(color=MODERN_COLORS[0], width=2.5),
-        marker=dict(size=4, color=MODERN_COLORS[0]),
-    ))
-    fig.add_trace(go.Scatter(
-        x=list(range(len(y_pred))), y=y_pred, mode='lines+markers', name='Predicted',
-        line=dict(color=MODERN_COLORS[1], width=2.5, dash='dot'),
-        marker=dict(size=4, color=MODERN_COLORS[1]),
-    ))
-    apply_modern_theme(fig, title=graph_header)
-    fig.update_layout(
-        xaxis=dict(title='Sample Index'),
-        yaxis=dict(title='Class Value'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-    )
-    return fig.to_json()
+    # Limit class value labels to MAX_LABEL_LENGTH characters for readability
+    y_labels = [str(val)[:MAX_LABEL_LENGTH] + ('...' if len(str(val)) > MAX_LABEL_LENGTH else '') for val in y]
+    y_pred_labels = [str(val)[:MAX_LABEL_LENGTH] + ('...' if len(str(val)) > MAX_LABEL_LENGTH else '') for val in y_pred]
+    
+    # Convert to ECharts format
+    actual_data = [[int(i), label] for i, label in enumerate(y_labels)]
+    predicted_data = [[int(i), label] for i, label in enumerate(y_pred_labels)]
+    
+    option = {
+        "responsive": True,
+        "backgroundColor": "#ffffff",
+        "title": {
+            "text": graph_header,
+            "left": "center",
+            "top": 12,
+            "textStyle": {"color": "#0f172a", "fontSize": 18, "fontWeight": 600}
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "textStyle": {"color": "#1f2937", "fontSize": 12},
+            "backgroundColor": "rgba(255,255,255,0.9)",
+            "borderColor": "#e5e7eb"
+        },
+        "grid": {
+            "top": "15%",
+            "bottom": "12%",
+            "left": "8%",
+            "right": "4%",
+            "containLabel": True
+        },
+        "xAxis": {
+            "type": "value",
+            "name": "Sample Index",
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {"color": "#1f2937", "fontSize": 11},
+            "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+        },
+        "yAxis": {
+            "type": "category",
+            "name": "Class Value",
+            "axisLine": {"lineStyle": {"color": "#e5e7eb"}},
+            "axisLabel": {"color": "#1f2937", "fontSize": 10},
+            "splitLine": {"lineStyle": {"color": "#f3f4f6"}}
+        },
+        "legend": {
+            "orient": "horizontal",
+            "bottom": "0%",
+            "left": "center",
+            "textStyle": {"color": "#374151", "fontSize": 12}
+        },
+        "series": [
+            {
+                "name": "Actual",
+                "type": "scatter",
+                "data": actual_data,
+                "symbolSize": 5,
+                "itemStyle": {"color": MODERN_COLORS[0], "opacity": 0.7, "borderColor": "#ffffff", "borderWidth": 1},
+                "label": {
+                    "show": False
+                }
+            },
+            {
+                "name": "Predicted",
+                "type": "scatter",
+                "data": predicted_data,
+                "symbolSize": 5,
+                "itemStyle": {"color": MODERN_COLORS[1], "opacity": 0.7, "borderColor": "#ffffff", "borderWidth": 1},
+                "label": {
+                    "show": False
+                }
+            }
+        ]
+    }
+    
+    return json.dumps(convert_to_native_python(option))

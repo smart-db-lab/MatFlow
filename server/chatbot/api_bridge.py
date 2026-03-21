@@ -1,6 +1,7 @@
+import os
 import requests
 
-BASE_API_URL = "http://localhost:8000/api"
+BASE_API_URL = os.getenv("API_BASE_URL", "").rstrip("/")
 
 API_MAP = {
     "display_correlation": "/display_correlation/",
@@ -20,6 +21,8 @@ def call_backend_api(arguments):
 
     if api_name not in API_MAP:
         return {"error": f"Unknown API: {api_name}"}
+    if not BASE_API_URL:
+        return {"error": "Missing API_BASE_URL environment variable."}
 
     try:
         r = requests.post(

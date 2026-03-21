@@ -17,6 +17,7 @@ router.register("hero-image", HeroImageViewSet)
 router.register("faq", FAQViewSet)
 
 urlpatterns = [
+    path("csrf/", csrf_cookie, name="csrf_cookie"),
     path("track-visit/", track_visit, name="track_visit"),
     path("visitor-stats/", visitor_stats, name="visitor_stats"),
 ]

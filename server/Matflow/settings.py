@@ -11,14 +11,20 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
 from pathlib import Path
+from datetime import timedelta
+from dotenv import load_dotenv
+
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load env from server/.env and override stale shell variables.
+load_dotenv(BASE_DIR / ".env", override=True)
+
 # Add this to your settings.py file, near the DEBUG setting
 from .debug_utilities import DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # Debug settings
 DEBUG_LEVEL = DEBUG if DEBUG else INFO  # Use debug level in development, info in production
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -27,23 +33,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-kpsbpg2#u&hd$==u++!tn-$)emz0va@o%*j#2!%$9oi#o5$8(&'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'server']
+ALLOWED_HOSTS = ['*']
 
 # Add the frontend URL to CSRF_TRUSTED_ORIGINS
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',  # Add your frontend origin
-    'http://127.0.0.1:5173',
+    'http://localhost:6060',  # Add your frontend origin
+    'http://127.0.0.1:6060',
 ]
 
 
 
 # With Vite proxy, requests are same-origin; explicit CORS origins not required
-# Keep for safety in case some tools still hit directly from 5173
+# Keep for safety in case some tools still hit directly from 6060
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:6060",
+    "http://127.0.0.1:6060",
 ]
 
 # Application definition
@@ -84,6 +90,11 @@ REST_FRAMEWORK = {
     ),
 }
 
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+}
+
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "My API Documentation",
@@ -95,6 +106,7 @@ SPECTACULAR_SETTINGS = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -158,6 +170,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 
 # Internationalization
@@ -212,24 +225,34 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:6060")
 
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", "2525"))
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Matflow <>")
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "20"))
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Matflow <no-reply@matflow.local>")
 
 
 
 
 import os
 
-os.environ["KAGGLE_USERNAME"] = "avro0184"
-os.environ["KAGGLE_KEY"] = "b084d3671f79bb58183812035eab3864"
+os.environ["KAGGLE_USERNAME"] = os.getenv("KAGGLE_USERNAME", "avro0184")
+os.environ["KAGGLE_KEY"] = os.getenv("KAGGLE_KEY", "b084d3671f79bb58183812035eab3864")
 
 
 # KAGGLE_USERNAME = os.environ.get("KAGGLE_USERNAME" , "avro0184")

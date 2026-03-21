@@ -153,7 +153,8 @@ function Navbar() {
   const homeLink = isMatflowContext ? '/matflow' : '/';
   const isLandingPage = location.pathname === '/';
   const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
-  const baseUrl = import.meta.env.VITE_APP_API_URL || 'http://localhost:8000';
+  const isAdminLoginPage = location.pathname === '/admin' || location.pathname === '/admin-login';
+  const baseUrl = import.meta.env.VITE_APP_API_URL || "";
   const titleImageUrl = headerSection?.title_image
     ? (headerSection.title_image.startsWith('http') ? headerSection.title_image : `${baseUrl}${headerSection.title_image}`)
     : null;
@@ -169,7 +170,19 @@ function Navbar() {
   const tabIconWrapClass = "w-5 h-5 rounded-md flex items-center justify-center border border-primary/20 bg-primary/10 group-hover:bg-primary/15 transition-colors";
   const tabIconClass = "w-3.5 h-3.5 text-primary";
 
+  const getCustomDisplayName = () => {
+    const username = userData?.username?.trim();
+    const emailLocal = userData?.email?.split("@")[0]?.trim();
+    if (!username) return "";
+    if (!emailLocal) return username;
+    return username.toLowerCase() !== emailLocal.toLowerCase() ? username : "";
+  };
+
   const getDisplayName = () => {
+    const customDisplayName = getCustomDisplayName();
+    if (customDisplayName) return customDisplayName;
+    const firstName = userData?.first_name?.trim();
+    if (firstName) return firstName;
     const fullName = userData?.full_name?.trim();
     if (fullName) return fullName;
     const username = userData?.username?.trim();
@@ -179,13 +192,13 @@ function Navbar() {
   };
 
   const getInitials = () => {
-    const fullName = userData?.full_name?.trim();
-    if (fullName) {
-      const names = fullName.split(" ");
+    const displayName = getDisplayName();
+    if (displayName) {
+      const names = displayName.split(" ");
       if (names.length >= 2) {
         return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
       }
-      return fullName.charAt(0).toUpperCase();
+      return displayName.charAt(0).toUpperCase();
     }
     if (userData?.email) return userData.email.charAt(0).toUpperCase();
     return "U";
@@ -265,16 +278,29 @@ function Navbar() {
                 &larr; Go Back
               </button>
             ) : (
-              <Link
-                to="/login"
-                className="relative flex items-center gap-1.5 px-3 py-2 font-medium text-gray-700 hover:text-primary transition-colors duration-200 group"
-              >
-                <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" />
-                </svg>
-                <span>Sign In</span>
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-200"></span>
-              </Link>
+              isAdminLoginPage ? (
+                <Link
+                  to="/"
+                  className="relative flex items-center gap-1.5 px-3 py-2 font-medium text-gray-700 hover:text-primary transition-colors duration-200 group"
+                >
+                  <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776 12 3l8.25 6.776V20.25a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75V16.5a2.25 2.25 0 0 0-4.5 0v3.75a.75.75 0 0 1-.75.75H4.5a.75.75 0 0 1-.75-.75V9.776Z" />
+                  </svg>
+                  <span>Home</span>
+                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-200"></span>
+                </Link>
+              ) : (
+                <Link
+                  to="/login"
+                  className="relative flex items-center gap-1.5 px-3 py-2 font-medium text-gray-700 hover:text-primary transition-colors duration-200 group"
+                >
+                  <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15" />
+                  </svg>
+                  <span>Sign In</span>
+                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary group-hover:w-full transition-all duration-200"></span>
+                </Link>
+              )
             )
           )}
 
@@ -282,7 +308,7 @@ function Navbar() {
             <button
               onClick={() => {
                 endGuestSession();
-                navigate("/login?mode=register");
+                navigate("/register");
               }}
               className="relative flex items-center gap-1.5 px-3 py-2 font-medium text-gray-700 hover:text-primary transition-colors duration-200 group"
             >

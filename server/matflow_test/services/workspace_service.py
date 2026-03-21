@@ -23,6 +23,7 @@ import pickle
 from typing import Optional
 
 import pandas as pd
+import joblib
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,7 @@ def resolve_input_path(workspace_id: str, filename: Optional[str] = None) -> str
     ws = _get_workspace(workspace_id)
 
     if filename:
+        filename = os.path.basename(str(filename).strip())
         candidates = [
             ws.output_path("generated_datasets", filename),
             ws.output_path("train_test", filename),
@@ -91,8 +93,22 @@ def resolve_input_path(workspace_id: str, filename: Optional[str] = None) -> str
         if os.path.isabs(filename) and os.path.exists(filename):
             return filename
 
+        original_dir = os.path.join(ws.base_dir, "original_dataset")
+        original_files = []
+        try:
+            if os.path.isdir(original_dir):
+                original_files = sorted(os.listdir(original_dir))
+        except Exception:
+            original_files = []
+
+        checked_paths = [os.path.abspath(p) for p in candidates]
         raise FileNotFoundError(
-            f"File '{filename}' not found in workspace '{workspace_id}'."
+            (
+                f"File '{filename}' not found in workspace '{workspace_id}'. "
+                f"Checked: {checked_paths}. "
+                f"Workspace dataset_filename='{ws.dataset_filename}'. "
+                f"original_dataset files={original_files}"
+            )
         )
 
     # No filename → use original upload
@@ -154,8 +170,32 @@ def load_model(workspace_id: str, filename: str):
     path = ws.output_path("models", filename)
     if not os.path.exists(path):
         raise FileNotFoundError(f"Model '{filename}' not found in workspace '{workspace_id}'.")
-    with open(path, "rb") as fh:
-        return pickle.load(fh)
+
+    # Preferred: models are persisted via joblib in Build_model flow.
+    try:
+        print(f"Attempting to load model using joblib from path: {path}")
+        model = joblib.load(path)
+        if not hasattr(model, "predict"):
+            raise TypeError(
+                f"joblib-loaded object is '{type(model).__name__}', expected estimator with .predict()"
+            )
+        return model
+    except Exception as joblib_exc:
+        # Backward compatibility: older artifacts may be plain pickle.
+        try:
+            with open(path, "rb") as fh:
+                print("Falling back to pickle loading for model at path:", path)
+                model = pickle.load(fh)
+            if not hasattr(model, "predict"):
+                raise TypeError(
+                    f"pickle-loaded object is '{type(model).__name__}', expected estimator with .predict()"
+                )
+            return model
+        except Exception as pickle_exc:
+            raise ValueError(
+                "Failed to deserialize a valid model estimator. "
+                f"joblib_error={joblib_exc}; pickle_error={pickle_exc}; path='{path}'"
+            )
 
 
 def save_chart(workspace_id: str, data: bytes, filename: str) -> str:

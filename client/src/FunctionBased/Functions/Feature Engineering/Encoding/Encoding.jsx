@@ -105,24 +105,10 @@ function Encoding({
                 foldername: activeFolder,
             });
 
-            toast.success(`Data updated successfully!`, {
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            toast.success("File saved successfully.");
             dispatch(setReRender(!render));
         } catch (error) {
-            toast.error("Something went wrong. Please try again", {
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            toast.error("Operation failed.");
         }
     };
 

@@ -1,4 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "../../../../../services/api/apiHelpers";
+
+const GRAPH_BASE =
+    `${API_BASE_URL}${import.meta.env.VITE_APP_API_GRAPH || "/api/graph_analysis/"}`;
 
 // export const uploadAndProcessData = (nodesFile, edgesFile, targetsFile) => {
 //     const formData = new FormData();
@@ -6,7 +10,7 @@ import axios from "axios";
 //     formData.append("edges", edgesFile);
 //     formData.append("targets", targetsFile);
 //
-//     return axios.post(`${import.meta.env.VITE_APP_API_GRAPH}/process-data/`, formData);
+//     return axios.post(`${GRAPH_BASE}process-data/`, formData);
 // };
 
 export const predict = (
@@ -23,14 +27,14 @@ export const predict = (
     formData.append("targets", targetsFile);
   }
   return axios.post(
-    `${import.meta.env.VITE_APP_API_GRAPH}/model-deploy/`,
+    `${GRAPH_BASE}model-deploy/`,
     formData
   );
 };
 
 export const trainModel = (config) => {
   return axios.post(
-    `${import.meta.env.VITE_APP_API_GRAPH}/train-model/`,
+    `${GRAPH_BASE}train-model/`,
     config
   );
 };
@@ -43,13 +47,13 @@ export const uploadAndProcessData = (graph_name, nodesFile, edgesFile, targetsFi
   formData.append("targets", targetsFile);
 
   return axios.post(
-    `${import.meta.env.VITE_APP_API_GRAPH}/process-data/`,
+    `${GRAPH_BASE}process-data/`,
     formData
   );
 };
 export const downloadFile = (fileType) => {
   return axios
-    .get(`${import.meta.env.VITE_APP_API_GRAPH}/download/${fileType}/`, {
+    .get(`${GRAPH_BASE}download/${fileType}/`, {
       responseType: "blob",
     })
     .then((response) => {

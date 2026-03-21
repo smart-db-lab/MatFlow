@@ -1,7 +1,9 @@
 import { apiService } from "../services/api/apiService";
 
 export const getWorkspaceRootFromPath = (pathValue = "") => {
-    const normalized = String(pathValue || "").replace(/\\/g, "/").trim();
+    const normalized = String(pathValue || "")
+        .replace(/\\/g, "/")
+        .trim();
     if (!normalized) return "";
     const [root] = normalized.split("/");
     return root || "";
@@ -82,16 +84,23 @@ export const UpdateFile = async ({
     }
 };
 
-export const ReadFile = async ({ projectId, foldername = "", filename }) => {
+export const ReadFile = async ({
+    projectId,
+    workspaceId,
+    foldername = "",
+    logicalFolder,
+    filename,
+}) => {
     if (!projectId || !filename) {
         throw new Error("projectId and filename are required to read a file.");
     }
     try {
-        const fileData = await apiService.matflow.dataset.readFile(
+        const fileData = await apiService.matflow.dataset.readFile({
             projectId,
-            foldername,
+            workspaceId,
+            folder: logicalFolder || foldername,
             filename,
-        );
+        });
         return fileData;
     } catch (error) {
         console.error("Error reading file:", error);
