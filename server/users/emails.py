@@ -4,21 +4,21 @@ from django.conf import settings
 
 def send_registration_otp_email(user, otp_code):
     try:
-        subject = "Verify Your Email! – MLFlow"
+        subject = "Verify Your Email! – MatFlowFlow"
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [user.email]
 
         text_content = textwrap.dedent(f"""
             Hi {user.full_name},
 
-            Thank you for signing up with MLFlow!
+            Thank you for signing up with MatFlow!
 
             Your verification code is: {otp_code}
 
             This code will expire in 5 minutes.
 
             Best regards,
-            The MLFlow Team
+            The Team Quantum
         """)
 
         html_content = f"""
@@ -59,7 +59,7 @@ def send_password_reset_otp_email(user, otp_code):
             This code will expire in 5 minutes.
 
             Best regards,
-            The MLFlow Team
+            The Team Quantum
         """)
 
         html_content = f"""
